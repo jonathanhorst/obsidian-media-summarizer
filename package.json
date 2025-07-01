@@ -21,6 +21,8 @@
 	"license": "MIT",
 	"devDependencies": {
 		"@types/node": "^20.14.0",
+		"@types/react": "^18.2.42",
+		"@types/react-dom": "^18.2.17",
 		"@typescript-eslint/eslint-plugin": "^7.18.0",
 		"@typescript-eslint/parser": "^7.18.0",
 		"builtin-modules": "^4.0.0",
@@ -30,6 +32,9 @@
 		"typescript": "^5.5.4"
 	},
 	"dependencies": {
-		"youtube-transcript": "^1.0.6"
+		"youtube-transcript": "^1.0.6",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
+		"react-youtube": "^10.1.0"
 	}
 }

@@ -38,6 +38,9 @@ const context = await esbuild.context({
 	sourcemap: prod ? false : 'inline',
 	treeShaking: true,
 	outfile: 'main.js',
+	jsx: 'transform',
+	jsxFactory: 'React.createElement',
+	jsxFragment: 'React.Fragment',
 });
 
 if (prod) {

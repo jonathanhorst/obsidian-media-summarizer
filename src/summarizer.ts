@@ -1,5 +1,6 @@
 import { YoutubeTranscript } from 'youtube-transcript';
 import { request } from 'obsidian';
+import { YoutubeAPITranscript, transcriptLinesToText, YoutubeTranscriptError as APITranscriptError } from './youtube-api-transcript';
 
 /**
  * Interface for OpenAI chat completion request
@@ -54,17 +55,85 @@ function extractVideoId(url: string): string | null {
  */
 export async function getTranscript(url: string): Promise<string> {
 	try {
-		// Extract video ID from URL
+		console.log('Attempting to fetch transcript using YouTube API method for:', url);
+
+		// Method 1: Try the new YouTube internal API approach first
+		try {
+			const apiResult = await YoutubeAPITranscript.getTranscript(url, {
+				lang: 'en',
+				country: 'US'
+			});
+			
+			const transcript = transcriptLinesToText(apiResult.lines);
+			
+			if (transcript && transcript.trim().length > 0) {
+				console.log('Successfully fetched transcript using YouTube API method, length:', transcript.length);
+				return transcript;
+			}
+		} catch (apiError) {
+			console.log('YouTube API method failed:', apiError.message);
+			// Continue to fallback method
+		}
+
+		console.log('Falling back to youtube-transcript library');
+
+		// Method 2: Fallback to the original youtube-transcript library
 		const videoId = extractVideoId(url);
 		if (!videoId) {
 			return 'Error: Invalid YouTube URL format. Please provide a valid YouTube video URL.';
 		}
 
-		// Fetch transcript using youtube-transcript library
-		const transcriptArray = await YoutubeTranscript.fetchTranscript(videoId);
+		// Try different language codes for transcript fetching
+		const languageCodes = ['en', 'en-US', 'en-GB', 'auto'];
+		let transcriptArray = null;
+		let lastError = null;
+
+		for (const lang of languageCodes) {
+			try {
+				console.log(`Trying youtube-transcript library with language: ${lang}`);
+				transcriptArray = await YoutubeTranscript.fetchTranscript(videoId, {
+					lang: lang
+				});
+				if (transcriptArray && transcriptArray.length > 0) {
+					console.log(`Successfully fetched transcript with language: ${lang}, entries: ${transcriptArray.length}`);
+					break;
+				}
+			} catch (langError) {
+				console.log(`Failed with language ${lang}:`, langError.message);
+				lastError = langError;
+				continue;
+			}
+		}
+
+		// If no language worked, try without language specification
+		if (!transcriptArray || transcriptArray.length === 0) {
+			try {
+				console.log('Trying to fetch transcript without language specification');
+				transcriptArray = await YoutubeTranscript.fetchTranscript(videoId);
+			} catch (generalError) {
+				console.log('Failed without language specification:', generalError.message);
+				lastError = generalError;
+			}
+		}
 		
 		if (!transcriptArray || transcriptArray.length === 0) {
-			return 'Error: No transcript available for this video. The video may not have captions or subtitles enabled.';
+			console.error('No transcript found after trying all methods');
+			return `Error: Unable to automatically fetch transcript for this video (ID: ${videoId}).
+
+This can happen because:
+• YouTube may be blocking automated transcript access
+• The video may have captions but they're not accessible via API
+• The video may not have transcripts available
+
+**Workaround:**
+1. Manually copy the transcript from YouTube:
+   - Click the "..." menu below the video
+   - Select "Show transcript"
+   - Copy the text and paste it into your note
+2. Then manually summarize using ChatGPT or Claude
+3. Or try a different video
+
+We're working on improving transcript access in future updates.`;
 		}
 
 		// Join transcript segments into a single text
@@ -78,6 +147,7 @@ export async function getTranscript(url: string): Promise<string> {
 			return 'Error: Transcript appears to be empty for this video.';
 		}
 
+		console.log('Successfully processed transcript using fallback method, length:', fullTranscript.length);
 		return fullTranscript;
 
 	} catch (error) {
@@ -86,10 +156,12 @@ export async function getTranscript(url: string): Promise<string> {
 		// Provide user-friendly error messages based on common error types
 		if (error.message?.includes('Could not retrieve a transcript')) {
 			return 'Error: No transcript found for this video. The video may not have captions enabled, may be private, or may not exist.';
-		} else if (error.message?.includes('network')) {
+		} else if (error.message?.includes('network') || error.message?.includes('fetch')) {
 			return 'Error: Network error while fetching transcript. Please check your internet connection and try again.';
+		} else if (error.message?.includes('Video unavailable')) {
+			return 'Error: Video unavailable. The video may be private, deleted, or restricted.';
 		} else {
-			return `Error: Failed to fetch transcript. ${error.message || 'Unknown error occurred.'}`;
+			return `Error: Failed to fetch transcript. ${error.message || 'Unknown error occurred.'} Please try a different video.`;
 		}
 	}
 }
