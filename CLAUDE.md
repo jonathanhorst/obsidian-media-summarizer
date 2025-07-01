@@ -45,3 +45,90 @@ The plugin follows Obsidian's plugin architecture with these key components:
 - OpenAI API key must be configured in plugin settings
 - Plugin validates API key format (must start with 'sk-')
 - Uses `isConfigured()` method to check setup status
+
+## Development Workflow
+
+### Directory Structure
+- **Development**: `/Users/jonathanhorst/development/youtube-plugin/`
+- **Production (Obsidian)**: `/Users/jonathanhorst/Library/CloudStorage/Dropbox/documents/Research/.obsidian/plugins/media-summarizer/`
+- **GitHub Repository**: `https://github.com/jonathanhorst/obsidian-media-summarizer.git`
+
+### Complete Development Cycle
+
+#### 1. Make Code Changes
+Work in the development directory (`/Users/jonathanhorst/development/youtube-plugin/`)
+
+#### 2. Build Plugin
+```bash
+npm run build
+```
+This creates `main.js` in the development directory.
+
+#### 3. Deploy to Obsidian (Local Testing)
+Copy essential files to the Obsidian plugin directory:
+```bash
+# Copy compiled plugin
+cp /Users/jonathanhorst/development/youtube-plugin/main.js /Users/jonathanhorst/Library/CloudStorage/Dropbox/documents/Research/.obsidian/plugins/media-summarizer/main.js
+
+# Copy metadata
+cp /Users/jonathanhorst/development/youtube-plugin/manifest.json /Users/jonathanhorst/Library/CloudStorage/Dropbox/documents/Research/.obsidian/plugins/media-summarizer/manifest.json
+
+# Copy styles
+cp /Users/jonathanhorst/development/youtube-plugin/styles.css /Users/jonathanhorst/Library/CloudStorage/Dropbox/documents/Research/.obsidian/plugins/media-summarizer/styles.css
+```
+
+#### 4. Test in Obsidian
+- Restart Obsidian or reload the plugin
+- Test new functionality
+- Verify everything works as expected
+
+#### 5. Commit to Git (Source Control)
+```bash
+# Stage source files (NOT main.js - it's gitignored)
+git add src/ package.json manifest.json styles.css CLAUDE.md
+
+# Commit with descriptive message
+git commit -m "Add transcript insertion feature
+
+- New Insert Transcript button in media player
+- Fetches full YouTube transcript with timestamps
+- Inserts at end of note with ## Transcript heading
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# Push to GitHub
+git push origin main
+```
+
+### Important Notes
+
+#### Files in Git Repository (Development Best Practices)
+**✅ Include in Git:**
+- Source code (`src/` directory)
+- Configuration (`package.json`, `tsconfig.json`, `esbuild.config.mjs`)
+- Plugin metadata (`manifest.json`)
+- Styles (`styles.css`)
+- Documentation (`README.md`, `CLAUDE.md`)
+
+**❌ Do NOT include in Git:**
+- Compiled output (`main.js`) - Users build their own
+- Dependencies (`node_modules/`) - Users run `npm install`
+- User settings (`data.json`) - Personal configuration
+
+#### Two-Track System
+- **GitHub**: Source code for development and collaboration
+- **Local Obsidian**: Compiled files for actual plugin usage
+
+#### Quick Deploy Script
+Consider creating a deploy script to automate step 3:
+```bash
+#!/bin/bash
+# deploy.sh
+PLUGIN_DIR="/Users/jonathanhorst/Library/CloudStorage/Dropbox/documents/Research/.obsidian/plugins/media-summarizer"
+cp main.js "$PLUGIN_DIR/main.js"
+cp manifest.json "$PLUGIN_DIR/manifest.json"
+cp styles.css "$PLUGIN_DIR/styles.css"
+echo "Plugin deployed to Obsidian!"
+```

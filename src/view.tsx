@@ -4,6 +4,7 @@ import * as React from 'react';
 import YouTube from 'react-youtube';
 import MediaSummarizerPlugin from './main';
 import { getTranscript, summarize } from './summarizer';
+import { YoutubeAPITranscript } from './youtube-api-transcript';
 
 /**
  * Unique identifier for the Media Summarizer view type
@@ -14,14 +15,28 @@ export const MEDIA_SUMMARIZER_VIEW_TYPE = 'media-summarizer-view';
  * Format seconds into HH:MM:SS format
  */
 export const formatTimestamp = (timestamp: number | undefined) => {
-	if (timestamp === undefined) return "";
-	const hours = Math.floor(timestamp / 3600);
-	const minutes = Math.floor((timestamp - hours * 3600) / 60);
-	const seconds = Math.floor(timestamp - hours * 3600 - minutes * 60);
-	const formattedSeconds = seconds < 10 ? `0${seconds}` : seconds;
-	const formattedMinutes = minutes < 10 ? `0${minutes}` : minutes;
+	// Handle undefined, null, NaN, or negative values
+	if (timestamp === undefined || timestamp === null || isNaN(timestamp) || timestamp < 0) {
+		return "00:00";
+	}
+	
+	// Ensure we have a valid number
+	const validTimestamp = Math.max(0, Math.floor(timestamp));
+	
+	const hours = Math.floor(validTimestamp / 3600);
+	const minutes = Math.floor((validTimestamp - hours * 3600) / 60);
+	const seconds = Math.floor(validTimestamp - hours * 3600 - minutes * 60);
+	
+	// Ensure we don't get NaN in our calculations
+	const safeSeconds = isNaN(seconds) ? 0 : seconds;
+	const safeMinutes = isNaN(minutes) ? 0 : minutes;
+	const safeHours = isNaN(hours) ? 0 : hours;
+	
+	const formattedSeconds = safeSeconds < 10 ? `0${safeSeconds}` : safeSeconds;
+	const formattedMinutes = safeMinutes < 10 ? `0${safeMinutes}` : safeMinutes;
+	
 	return `${
-		hours > 0 ? hours + ":" : ""
+		safeHours > 0 ? safeHours + ":" : ""
 	}${formattedMinutes}:${formattedSeconds}`;
 };
 
@@ -189,6 +204,100 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady })
 		}
 	};
 
+	const insertFullTranscript = async () => {
+		const activeFile = plugin.app.workspace.getActiveFile();
+		if (!activeFile) {
+			new Notice('No active note found. Please open a note first.');
+			return;
+		}
+
+		let activeView: MarkdownView | null = null;
+		
+		const currentActiveView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
+		if (currentActiveView && currentActiveView.file?.path === activeFile.path) {
+			activeView = currentActiveView;
+		} else {
+			const leaves = plugin.app.workspace.getLeavesOfType('markdown');
+			for (const leaf of leaves) {
+				const view = leaf.view as MarkdownView;
+				if (view.file?.path === activeFile.path) {
+					activeView = view;
+					plugin.app.workspace.setActiveLeaf(leaf, { focus: true });
+					break;
+				}
+			}
+		}
+
+		if (!activeView) {
+			new Notice('Cannot find editor for the active note.');
+			return;
+		}
+
+		try {
+			const loadingNotice = new Notice('Fetching full transcript...', 0);
+
+			const transcriptResponse = await YoutubeAPITranscript.getTranscript(mediaLink);
+			
+			loadingNotice.hide();
+
+			if (!transcriptResponse.lines || transcriptResponse.lines.length === 0) {
+				new Notice('No transcript available for this video.');
+				return;
+			}
+
+			const editor = activeView.editor;
+			
+			// Position cursor at the end of the note
+			const lastLine = editor.lastLine();
+			const lastLineLength = editor.getLine(lastLine).length;
+			editor.setCursor(lastLine, lastLineLength);
+
+			// Format transcript with timestamps
+			const formattedTranscript = transcriptResponse.lines
+				.map((line, index) => {
+					// Validate offset and provide fallback
+					const offsetMs = typeof line.offset === 'number' && !isNaN(line.offset) ? line.offset : 0;
+					const offsetSeconds = offsetMs / 1000;
+					
+					// Validate the resulting seconds value
+					const validSeconds = isNaN(offsetSeconds) ? 0 : offsetSeconds;
+					
+					const timestamp = formatTimestamp(validSeconds);
+					
+					// If timestamp is still empty, provide a fallback
+					const finalTimestamp = timestamp || "00:00";
+					
+					// Debug log for problematic entries
+					if (!timestamp || timestamp.includes('NaN')) {
+						console.warn(`Invalid timestamp at line ${index}:`, {
+							originalOffset: line.offset,
+							offsetMs,
+							offsetSeconds,
+							validSeconds,
+							timestamp,
+							text: line.text
+						});
+					}
+					
+					return `[${finalTimestamp}] ${line.text}`;
+				})
+				.join('\n');
+
+			const transcriptText = `\n\n## Transcript\n\n${formattedTranscript}\n`;
+			editor.replaceRange(transcriptText, editor.getCursor());
+
+			new Notice('Full transcript inserted!');
+
+			// Scroll to show the transcript
+			const newLastLine = editor.lastLine();
+			editor.scrollIntoView({ from: { line: newLastLine - 10, ch: 0 }, to: { line: newLastLine, ch: 0 } });
+
+		} catch (error) {
+			console.error('Error inserting transcript:', error);
+			new Notice('Error fetching transcript. Please try again.');
+		}
+	};
+
 	if (!videoId) {
 		return (
 			<div className="media-summarizer-placeholder">
@@ -229,6 +338,12 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady })
 						onClick={generateSummary}
 					>
 						📝 Summarize
+					</button>
+					<button 
+						className="media-summarizer-btn media-summarizer-transcript-btn"
+						onClick={insertFullTranscript}
+					>
+						📄 Insert Transcript
 					</button>
 				</div>
 			)}

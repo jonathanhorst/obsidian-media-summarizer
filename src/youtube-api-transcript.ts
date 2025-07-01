@@ -85,12 +85,30 @@ function parseTranscript(responseContent: string): TranscriptLine[] {
 			return [];
 		}
 
-		return transcriptEvents.map((segment: any) => {
+		return transcriptEvents.map((segment: any, index: number) => {
 			const cue = segment.transcriptSegmentRenderer;
+			
+			// Debug logging to understand the structure
+			console.log(`Transcript segment ${index}:`, cue);
+			
+			// Safely parse timestamps with fallbacks
+			const startTimeMs = cue.startTimeMs || cue.startMs || "0";
+			const endTimeMs = cue.endMs || cue.endTimeMs || startTimeMs;
+			
+			// Parse as numbers with validation
+			const startTime = parseInt(startTimeMs.toString(), 10);
+			const endTime = parseInt(endTimeMs.toString(), 10);
+			
+			// Validate parsed numbers
+			const validStartTime = isNaN(startTime) ? 0 : startTime;
+			const validEndTime = isNaN(endTime) ? validStartTime + 1000 : endTime; // Default 1 second duration
+			
+			console.log(`Parsed times - Start: ${validStartTime}ms, End: ${validEndTime}ms`);
+			
 			return {
 				text: cue.snippet?.runs?.[0]?.text || "",
-				duration: parseInt(cue.endMs) - parseInt(cue.startTimeMs),
-				offset: parseInt(cue.startTimeMs),
+				duration: validEndTime - validStartTime,
+				offset: validStartTime,
 			};
 		});
 	} catch (error) {
