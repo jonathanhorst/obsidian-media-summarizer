@@ -1,6 +1,7 @@
-import { Plugin, WorkspaceLeaf, Notice } from 'obsidian';
+import { Plugin, WorkspaceLeaf, Notice, MarkdownView } from 'obsidian';
 import { MediaSummarizerView, MEDIA_SUMMARIZER_VIEW_TYPE } from './view';
 import { MediaSummarizerSettingTab, MediaSummarizerSettings, DEFAULT_SETTINGS } from './settings';
+import { createTimestampClickHandlerPlugin, convertTimestampToSeconds } from './timestamp-click-handler';
 
 /**
  * Main plugin class for Media Summarizer
@@ -11,10 +12,41 @@ export default class MediaSummarizerPlugin extends Plugin {
 	private lastActiveFilePath: string | null = null;
 
 	/**
+	 * Handle timestamp clicks - jump to specific time in video
+	 */
+	handleTimestampClick = (timestamp: string): boolean | undefined => {
+		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+		if (!activeView) return;
+
+		// Get the Media Summarizer view that contains the video player
+		const leaves = this.app.workspace.getLeavesOfType(MEDIA_SUMMARIZER_VIEW_TYPE);
+		if (leaves.length === 0) return;
+
+		const mediaSummarizerView = leaves[0].view as MediaSummarizerView;
+		if (!mediaSummarizerView) return;
+
+		// Get the YouTube player reference from the view
+		const ytRef = mediaSummarizerView.getYouTubePlayerRef();
+		if (!ytRef || !ytRef.current) return;
+
+		// Convert timestamp to seconds and seek to that position
+		const seconds = convertTimestampToSeconds(timestamp);
+		ytRef.current.getInternalPlayer()?.seekTo(seconds, true);
+
+		console.log(`Jumped to timestamp: ${timestamp} (${seconds} seconds)`);
+		return true;
+	};
+
+	/**
 	 * Plugin initialization
 	 */
 	async onload(): Promise<void> {
 		console.log('Loading Media Summarizer plugin');
+
+		// Register CodeMirror extension for timestamp clicks
+		this.registerEditorExtension([
+			createTimestampClickHandlerPlugin(this.handleTimestampClick),
+		]);
 
 		// Load settings
 		await this.loadSettings();

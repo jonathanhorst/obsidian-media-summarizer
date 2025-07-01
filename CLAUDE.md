@@ -132,3 +132,45 @@ cp manifest.json "$PLUGIN_DIR/manifest.json"
 cp styles.css "$PLUGIN_DIR/styles.css"
 echo "Plugin deployed to Obsidian!"
 ```
+
+## Reference Materials
+
+### Directory Structure
+The `.references/` directory contains cloned repositories for reference and learning purposes. These are not part of the main project but provide valuable implementation examples.
+
+```
+.references/
+├── obsidian-media-notes/        # Clickable timestamps implementation
+├── youtube-video-summarizer/    # YouTube video summarization approaches  
+└── obsidian-yt-transcript/      # YouTube transcript extraction methods
+```
+
+### Purpose of Each Reference
+
+#### obsidian-media-notes
+- **Focus**: Clickable timestamp implementation that maintains markdown compatibility
+- **Key Features**: Timestamps that jump to video positions when clicked
+- **Use Case**: Understanding how to make timestamps interactive while keeping files interoperable with other markdown editors
+
+#### youtube-video-summarizer  
+- **Focus**: Video summarization techniques and UI patterns
+- **Key Features**: Different approaches to YouTube content processing
+- **Use Case**: Comparing summarization methods and user interface designs
+
+#### obsidian-yt-transcript
+- **Focus**: YouTube transcript extraction implementations
+- **Key Features**: Alternative methods for fetching YouTube transcripts
+- **Use Case**: Understanding different transcript API approaches and error handling
+
+### Important Notes
+- **Not part of main project**: These repositories are excluded from git via `.gitignore`
+- **Reference only**: Code from these repos should be studied and adapted, not directly copied
+- **Markdown compatibility**: Focus on solutions that maintain standard markdown format
+- **Learning resource**: Use these to understand best practices and different implementation approaches
+
+### Usage Guidelines
+When implementing new features:
+1. Study relevant reference implementations
+2. Adapt patterns to fit our plugin architecture
+3. Maintain markdown interoperability 
+4. Document any insights gained from reference materials

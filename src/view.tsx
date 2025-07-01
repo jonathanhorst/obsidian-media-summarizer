@@ -66,10 +66,10 @@ interface MediaPlayerProps {
 	mediaLink: string;
 	plugin: MediaSummarizerPlugin;
 	onReady: () => void;
+	ytRef: React.RefObject<YouTube>;
 }
 
-const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady }) => {
-	const ytRef = React.createRef<YouTube>();
+const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, ytRef }) => {
 	const [isReady, setIsReady] = React.useState(false);
 
 	const videoId = getVideoId(mediaLink);
@@ -279,7 +279,7 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady })
 						});
 					}
 					
-					return `[${finalTimestamp}] ${line.text}`;
+					return `[${finalTimestamp}]() - ${line.text}`;
 				})
 				.join('\n');
 
@@ -358,6 +358,7 @@ export class MediaSummarizerView extends ItemView {
 	plugin: MediaSummarizerPlugin;
 	private root: Root | null = null;
 	private currentVideoUrl: string = '';
+	private ytRef: React.RefObject<YouTube> = React.createRef<YouTube>();
 
 	constructor(leaf: WorkspaceLeaf, plugin: MediaSummarizerPlugin) {
 		super(leaf);
@@ -374,6 +375,13 @@ export class MediaSummarizerView extends ItemView {
 
 	getIcon(): string {
 		return 'play';
+	}
+
+	/**
+	 * Get the YouTube player reference for timestamp click handling
+	 */
+	getYouTubePlayerRef(): React.RefObject<YouTube> {
+		return this.ytRef;
 	}
 
 	async onOpen(): Promise<void> {
@@ -451,6 +459,7 @@ export class MediaSummarizerView extends ItemView {
 				mediaLink={url} 
 				plugin={this.plugin}
 				onReady={() => console.log('Video player ready')}
+				ytRef={this.ytRef}
 			/>
 		);
 	}
