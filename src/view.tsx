@@ -119,8 +119,7 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 			const formattedTimestamp = formatTimestamp(timestamp);
 			
 			const editor = activeView.editor;
-			const cursor = editor.getCursor();
-			editor.replaceRange(`[${formattedTimestamp}] `, cursor);
+			editor.replaceSelection(`[${formattedTimestamp}]() `);
 
 			new Notice(`Timestamp inserted: ${formattedTimestamp}`);
 

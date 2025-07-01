@@ -83,6 +83,9 @@ export default class MediaSummarizerPlugin extends Plugin {
 			}
 		});
 
+		// Keyboard Shortcut Commands for Video Control
+		this.addVideoControlCommands();
+
 		// Listen for active file changes to refresh the view
 		// Only refresh when switching to a different file, not just changing focus
 		this.registerEvent(
@@ -119,6 +122,331 @@ export default class MediaSummarizerPlugin extends Plugin {
 	onunload(): void {
 		console.log('Unloading Media Summarizer plugin');
 		// Cleanup is handled automatically by Obsidian for registered views and events
+	}
+
+	/**
+	 * Add all video control commands for keyboard shortcuts
+	 */
+	private addVideoControlCommands(): void {
+		// 1. Insert Timestamp (⌃I)
+		this.addCommand({
+			id: 'insert-timestamp',
+			name: 'Insert Timestamp',
+			editorCallback: async (editor, view) => {
+				await this.insertTimestampCommand(editor, view);
+			}
+		});
+
+		// 2. Play/Pause (⌃K)
+		this.addCommand({
+			id: 'toggle-play-pause',
+			name: 'Play/Pause',
+			editorCallback: async (editor, view) => {
+				await this.togglePlayPauseCommand();
+			}
+		});
+
+		// 3. Fast Forward (⌃L)
+		this.addCommand({
+			id: 'seek-forward',
+			name: 'Fast Forward',
+			editorCallback: async (editor, view) => {
+				await this.seekForwardCommand();
+			}
+		});
+
+		// 4. Rewind (⌃J)
+		this.addCommand({
+			id: 'seek-backward',
+			name: 'Rewind',
+			editorCallback: async (editor, view) => {
+				await this.seekBackwardCommand();
+			}
+		});
+
+		// 5. Speed Up (Shift + >)
+		this.addCommand({
+			id: 'speed-up',
+			name: 'Speed Up',
+			editorCallback: async (editor, view) => {
+				await this.speedUpCommand();
+			}
+		});
+
+		// 6. Speed Down (Shift + <)
+		this.addCommand({
+			id: 'speed-down',
+			name: 'Speed Down',
+			editorCallback: async (editor, view) => {
+				await this.speedDownCommand();
+			}
+		});
+
+		// 7. Mute/Unmute (M)
+		this.addCommand({
+			id: 'toggle-mute',
+			name: 'Mute/Unmute',
+			editorCallback: async (editor, view) => {
+				await this.toggleMuteCommand();
+			}
+		});
+
+		// 8. Show Help (?)
+		this.addCommand({
+			id: 'show-shortcuts-help',
+			name: 'Show Keyboard Shortcuts',
+			editorCallback: async (editor, view) => {
+				this.showShortcutsHelp();
+			}
+		});
+	}
+
+	/**
+	 * Get the active YouTube player from MediaSummarizerView
+	 */
+	private getActiveYouTubePlayer() {
+		const leaves = this.app.workspace.getLeavesOfType(MEDIA_SUMMARIZER_VIEW_TYPE);
+		if (leaves.length === 0) return null;
+
+		const mediaSummarizerView = leaves[0].view as MediaSummarizerView;
+		if (!mediaSummarizerView) return null;
+
+		const ytRef = mediaSummarizerView.getYouTubePlayerRef();
+		if (!ytRef || !ytRef.current) return null;
+
+		return ytRef.current;
+	}
+
+	/**
+	 * Show visual feedback notification
+	 */
+	private showFeedback(message: string): void {
+		new Notice(message, 2000);
+	}
+
+	/**
+	 * Show keyboard shortcuts help overlay
+	 */
+	private showShortcutsHelp(): void {
+		const helpText = `Media Summarizer Keyboard Shortcuts:
+
+⌃I - Insert Timestamp
+⌃K - Play/Pause
+⌃J - Rewind
+⌃L - Fast Forward
+Shift + > - Speed Up
+Shift + < - Speed Down
+M - Mute/Unmute
+
+Settings: Configure seek distance and timestamp behavior in plugin settings.
+Note: Set these shortcuts in Obsidian's Hotkey settings.`;
+
+		new Notice(helpText, 8000);
+	}
+
+	/**
+	 * Command implementations
+	 */
+	private async insertTimestampCommand(editor: any, view: any): Promise<void> {
+		const player = this.getActiveYouTubePlayer();
+		if (!player) {
+			this.showFeedback('No video player found. Open a media note first.');
+			return;
+		}
+
+		try {
+			const timestamp = await player.internalPlayer?.getCurrentTime();
+			if (!timestamp) {
+				this.showFeedback('Could not get current video time');
+				return;
+			}
+
+			const offsetTimestamp = Math.max(0, timestamp - this.settings.timestampOffsetSeconds);
+			const formattedTimestamp = this.formatTimestamp(offsetTimestamp);
+			
+			editor.replaceSelection(`[${formattedTimestamp}]() `);
+			
+			// Rewind video playback by playbackOffsetSeconds
+			if (this.settings.playbackOffsetSeconds > 0) {
+				const newPlaybackTime = Math.max(0, timestamp - this.settings.playbackOffsetSeconds);
+				await player.getInternalPlayer()?.seekTo(newPlaybackTime, true);
+			}
+			
+			if (this.settings.pauseOnTimestampInsert) {
+				await player.getInternalPlayer()?.pauseVideo();
+			}
+
+			this.showFeedback(`Timestamp inserted: ${formattedTimestamp}`);
+		} catch (error) {
+			console.error('Error inserting timestamp:', error);
+			this.showFeedback('Error inserting timestamp');
+		}
+	}
+
+	private async togglePlayPauseCommand(): Promise<void> {
+		const player = this.getActiveYouTubePlayer();
+		if (!player) {
+			this.showFeedback('No video player found');
+			return;
+		}
+
+		try {
+			const playerState = await player.internalPlayer?.getPlayerState();
+			if (playerState === 1) { // Playing
+				await player.getInternalPlayer()?.pauseVideo();
+				this.showFeedback('Video paused');
+			} else {
+				await player.getInternalPlayer()?.playVideo();
+				this.showFeedback('Video playing');
+			}
+		} catch (error) {
+			console.error('Error toggling play/pause:', error);
+			this.showFeedback('Error controlling playback');
+		}
+	}
+
+	private async seekForwardCommand(): Promise<void> {
+		const player = this.getActiveYouTubePlayer();
+		if (!player) {
+			this.showFeedback('No video player found');
+			return;
+		}
+
+		try {
+			const currentTime = await player.internalPlayer?.getCurrentTime();
+			if (currentTime !== undefined) {
+				const newTime = currentTime + this.settings.seekSeconds;
+				await player.getInternalPlayer()?.seekTo(newTime, true);
+				this.showFeedback(`Jumped forward ${this.settings.seekSeconds}s`);
+			}
+		} catch (error) {
+			console.error('Error seeking forward:', error);
+			this.showFeedback('Error seeking forward');
+		}
+	}
+
+	private async seekBackwardCommand(): Promise<void> {
+		const player = this.getActiveYouTubePlayer();
+		if (!player) {
+			this.showFeedback('No video player found');
+			return;
+		}
+
+		try {
+			const currentTime = await player.internalPlayer?.getCurrentTime();
+			if (currentTime !== undefined) {
+				const newTime = Math.max(0, currentTime - this.settings.seekSeconds);
+				await player.getInternalPlayer()?.seekTo(newTime, true);
+				this.showFeedback(`Jumped backward ${this.settings.seekSeconds}s`);
+			}
+		} catch (error) {
+			console.error('Error seeking backward:', error);
+			this.showFeedback('Error seeking backward');
+		}
+	}
+
+	private async speedUpCommand(): Promise<void> {
+		const player = this.getActiveYouTubePlayer();
+		if (!player) {
+			this.showFeedback('No video player found');
+			return;
+		}
+
+		try {
+			const internalPlayer = player.getInternalPlayer();
+			if (!internalPlayer) return;
+
+			const playbackRates = await internalPlayer.getAvailablePlaybackRates();
+			const currentRate = await internalPlayer.getPlaybackRate();
+			const currentIndex = playbackRates.indexOf(currentRate);
+			const nextIndex = Math.min(currentIndex + 1, playbackRates.length - 1);
+			const nextRate = playbackRates[nextIndex];
+
+			await internalPlayer.setPlaybackRate(nextRate);
+			this.showFeedback(`Speed: ${nextRate}x`);
+		} catch (error) {
+			console.error('Error changing speed:', error);
+			this.showFeedback('Error changing speed');
+		}
+	}
+
+	private async speedDownCommand(): Promise<void> {
+		const player = this.getActiveYouTubePlayer();
+		if (!player) {
+			this.showFeedback('No video player found');
+			return;
+		}
+
+		try {
+			const internalPlayer = player.getInternalPlayer();
+			if (!internalPlayer) return;
+
+			const playbackRates = await internalPlayer.getAvailablePlaybackRates();
+			const currentRate = await internalPlayer.getPlaybackRate();
+			const currentIndex = playbackRates.indexOf(currentRate);
+			const nextIndex = Math.max(currentIndex - 1, 0);
+			const nextRate = playbackRates[nextIndex];
+
+			await internalPlayer.setPlaybackRate(nextRate);
+			this.showFeedback(`Speed: ${nextRate}x`);
+		} catch (error) {
+			console.error('Error changing speed:', error);
+			this.showFeedback('Error changing speed');
+		}
+	}
+
+	private async toggleMuteCommand(): Promise<void> {
+		const player = this.getActiveYouTubePlayer();
+		if (!player) {
+			this.showFeedback('No video player found');
+			return;
+		}
+
+		try {
+			const internalPlayer = player.getInternalPlayer();
+			if (!internalPlayer) return;
+
+			const isMuted = await internalPlayer.isMuted();
+			if (isMuted) {
+				await internalPlayer.unMute();
+				this.showFeedback('Audio unmuted');
+			} else {
+				await internalPlayer.mute();
+				this.showFeedback('Audio muted');
+			}
+		} catch (error) {
+			console.error('Error toggling mute:', error);
+			this.showFeedback('Error toggling mute');
+		}
+	}
+
+	/**
+	 * Format timestamp with smart formatting
+	 */
+	private formatTimestamp(timestamp: number): string {
+		if (timestamp === undefined || timestamp === null || isNaN(timestamp) || timestamp < 0) {
+			return "00:00";
+		}
+		
+		const validTimestamp = Math.max(0, Math.floor(timestamp));
+		
+		const hours = Math.floor(validTimestamp / 3600);
+		const minutes = Math.floor((validTimestamp - hours * 3600) / 60);
+		const seconds = Math.floor(validTimestamp - hours * 3600 - minutes * 60);
+		
+		const safeSeconds = isNaN(seconds) ? 0 : seconds;
+		const safeMinutes = isNaN(minutes) ? 0 : minutes;
+		const safeHours = isNaN(hours) ? 0 : hours;
+		
+		const formattedSeconds = safeSeconds < 10 ? `0${safeSeconds}` : safeSeconds;
+		const formattedMinutes = safeMinutes < 10 ? `0${safeMinutes}` : safeMinutes;
+		
+		// Smart formatting: only show hours if video is longer than 1 hour
+		if (safeHours > 0) {
+			return `${safeHours}:${formattedMinutes}:${formattedSeconds}`;
+		} else {
+			return `${formattedMinutes}:${formattedSeconds}`;
+		}
 	}
 
 	/**
