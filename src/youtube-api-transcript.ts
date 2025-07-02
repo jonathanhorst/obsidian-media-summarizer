@@ -73,26 +73,89 @@ const YOUTUBE_VIDEOID_REGEX = new RegExp(
  */
 function parseTranscript(responseContent: string): TranscriptLine[] {
 	try {
+		console.log('Raw response content length:', responseContent.length);
+		console.log('Raw response preview:', responseContent.substring(0, 500));
+		
 		const response = JSON.parse(responseContent);
-
-		// Extract transcript from YouTube API response
-		const transcriptEvents =
-			response?.actions?.[0]?.updateEngagementPanelAction?.content
-				?.transcriptRenderer?.content?.transcriptSearchPanelRenderer
+		console.log('Parsed response structure:', Object.keys(response));
+		
+		// Explore the response structure more deeply
+		if (response.actions) {
+			console.log('Actions array length:', response.actions.length);
+			response.actions.forEach((action: any, index: number) => {
+				console.log(`Action ${index} keys:`, Object.keys(action));
+			});
+		}
+		
+		// Try multiple possible paths for transcript data
+		let transcriptEvents = null;
+		
+		// Original path
+		transcriptEvents = response?.actions?.[0]?.updateEngagementPanelAction?.content
+			?.transcriptRenderer?.content?.transcriptSearchPanelRenderer
+			?.body?.transcriptSegmentListRenderer?.initialSegments;
+			
+		if (!transcriptEvents) {
+			// Try alternative paths that might exist in new format
+			transcriptEvents = response?.contents?.twoColumnWatchNextResults?.results?.results?.contents
+				?.find((item: any) => item.videoPrimaryInfoRenderer)?.transcriptRenderer?.content?.transcriptSearchPanelRenderer
 				?.body?.transcriptSegmentListRenderer?.initialSegments;
+		}
+		
+		if (!transcriptEvents) {
+			// Search recursively for any transcript-related data
+			const searchForTranscript = (obj: any, path = ''): any => {
+				if (!obj || typeof obj !== 'object') return null;
+				
+				for (const key in obj) {
+					if (key.toLowerCase().includes('transcript')) {
+						console.log(`Found transcript-related key at ${path}.${key}:`, typeof obj[key]);
+						if (obj[key] && typeof obj[key] === 'object') {
+							console.log(`Transcript object keys:`, Object.keys(obj[key]));
+						}
+					}
+					
+					if (typeof obj[key] === 'object' && obj[key] !== null) {
+						const result = searchForTranscript(obj[key], `${path}.${key}`);
+						if (result) return result;
+					}
+				}
+				return null;
+			};
+			
+			console.log('Searching for transcript data in response...');
+			searchForTranscript(response);
+		}
+
+		console.log('Transcript events found:', transcriptEvents ? transcriptEvents.length : 'none');
 
 		if (!transcriptEvents || !Array.isArray(transcriptEvents)) {
+			console.log('No valid transcript events found in response');
 			return [];
 		}
 
-		return transcriptEvents.map((segment: any, index: number) => {
+		return transcriptEvents
+			.filter((segment: any) => {
+				// Skip header segments, only process actual transcript segments
+				return segment.transcriptSegmentRenderer && !segment.transcriptSectionHeaderRenderer;
+			})
+			.map((segment: any, index: number) => {
 			const cue = segment.transcriptSegmentRenderer;
 			
-			// Debug logging to understand the structure
-			console.log(`Transcript segment ${index}:`, cue);
+			// Extract text from snippet
+			let text = '';
+			if (cue.snippet && cue.snippet.runs) {
+				text = cue.snippet.runs.map((run: any) => run.text).join('');
+			} else if (cue.snippet && cue.snippet.simpleText) {
+				text = cue.snippet.simpleText;
+			} else if (cue.text) {
+				text = cue.text;
+			}
 			
-			// Safely parse timestamps with fallbacks
-			const startTimeMs = cue.startTimeMs || cue.startMs || "0";
+			console.log(`Segment ${index} text:`, text);
+			
+			// Extract timing information
+			const startTimeMs = cue.startMs || cue.startTimeMs || "0";
 			const endTimeMs = cue.endMs || cue.endTimeMs || startTimeMs;
 			
 			// Parse as numbers with validation
@@ -106,7 +169,7 @@ function parseTranscript(responseContent: string): TranscriptLine[] {
 			console.log(`Parsed times - Start: ${validStartTime}ms, End: ${validEndTime}ms`);
 			
 			return {
-				text: cue.snippet?.runs?.[0]?.text || "",
+				text: text,
 				duration: validEndTime - validStartTime,
 				offset: validStartTime,
 			};
@@ -222,19 +285,35 @@ export class YoutubeAPITranscript {
 		try {
 			console.log('Fetching video page:', url);
 			
-			// First, fetch the video page
-			const videoPageBody = await request(url);
+			// First, fetch the video page using requestUrl for better CORS handling
+			const videoPageResponse = await requestUrl({
+				url: url,
+				method: 'GET',
+				headers: {
+					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+				}
+			});
+			const videoPageBody = videoPageResponse.text;
 			
 			// Parse the page to extract transcript request info
 			const videoData = parseVideoPage(videoPageBody, config);
 			
 			console.log('Making transcript API request');
 			
-			// Make the transcript API request
+			// Make the transcript API request with proper headers
+			const headers = {
+				'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+				'Accept': '*/*',
+				'Accept-Language': 'en-US,en;q=0.9',
+				'Origin': 'https://www.youtube.com',
+				'Referer': url,
+				...videoData.transcriptRequest.headers
+			};
+			
 			const response = await requestUrl({
 				url: videoData.transcriptRequest.url,
 				method: "POST",
-				headers: videoData.transcriptRequest.headers || {},
+				headers: headers,
 				body: videoData.transcriptRequest.body,
 			});
 

@@ -166,6 +166,24 @@
 	filter: brightness(1.1);
 }
 
+.media-summarizer-transcript-btn {
+	background: var(--color-purple);
+}
+
+.media-summarizer-transcript-btn:hover {
+	background: var(--color-purple-hover, var(--color-purple));
+	filter: brightness(1.1);
+}
+
+.media-summarizer-raw-transcript-btn {
+	background: var(--color-orange);
+}
+
+.media-summarizer-raw-transcript-btn:hover {
+	background: var(--color-orange-hover, var(--color-orange));
+	filter: brightness(1.1);
+}
+
 .media-summarizer-refresh-btn {
 	background: var(--interactive-normal);
 	color: var(--text-normal);

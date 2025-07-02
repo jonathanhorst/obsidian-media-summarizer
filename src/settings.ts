@@ -6,6 +6,8 @@ import MediaSummarizerPlugin from './main';
  */
 export interface MediaSummarizerSettings {
 	openaiApiKey: string;
+	aiModel: string;
+	enhancedTranscriptFormatting: boolean;
 	seekSeconds: number;
 	timestampOffsetSeconds: number;
 	playbackOffsetSeconds: number;
@@ -18,6 +20,8 @@ export interface MediaSummarizerSettings {
  */
 export const DEFAULT_SETTINGS: MediaSummarizerSettings = {
 	openaiApiKey: '',
+	aiModel: 'gpt-4o-mini',
+	enhancedTranscriptFormatting: true,
 	seekSeconds: 10,
 	timestampOffsetSeconds: 2,
 	playbackOffsetSeconds: 2,
@@ -68,6 +72,51 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 		containerEl.createEl('div', {
 			cls: 'setting-item-description',
 			text: '⚠️ Your API key is stored locally and only sent to OpenAI for summarization requests.'
+		});
+
+		// AI Model Section
+		containerEl.createEl('h3', { text: 'AI Model Selection' });
+
+		// AI Model setting
+		new Setting(containerEl)
+			.setName('AI Model')
+			.setDesc('Choose the OpenAI model for transcript enhancement and summarization')
+			.addDropdown(dropdown => dropdown
+				.addOptions({
+					'gpt-4o-mini': 'GPT-4o-mini (Recommended - Best balance)',
+					'gpt-4o': 'GPT-4o (Latest - Highest quality)',
+					'gpt-4-turbo': 'GPT-4-turbo (High quality)'
+				})
+				.setValue(this.plugin.settings.aiModel)
+				.onChange(async (value) => {
+					this.plugin.settings.aiModel = value;
+					await this.plugin.saveSettings();
+				}));
+
+		// Model comparison info
+		containerEl.createEl('div', {
+			cls: 'setting-item-description',
+			text: '💡 GPT-4o-mini offers the best balance of quality and cost. GPT-4o is the latest model with the highest quality and capabilities. GPT-4-turbo provides excellent quality at moderate cost.'
+		});
+
+		// Transcript Enhancement Section
+		containerEl.createEl('h3', { text: 'Transcript Enhancement' });
+
+		// Enhanced transcript formatting setting
+		new Setting(containerEl)
+			.setName('Enhanced transcript formatting')
+			.setDesc('Use AI to improve YouTube transcript readability with better punctuation, speaker identification, and organized sections')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enhancedTranscriptFormatting)
+				.onChange(async (value) => {
+					this.plugin.settings.enhancedTranscriptFormatting = value;
+					await this.plugin.saveSettings();
+				}));
+
+		// Enhancement details
+		containerEl.createEl('div', {
+			cls: 'setting-item-description',
+			text: '💡 Enhancement uses video title and description to improve name spelling and speaker identification.'
 		});
 
 		// Video Controls Section

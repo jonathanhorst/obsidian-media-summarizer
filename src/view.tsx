@@ -3,7 +3,7 @@ import { createRoot, Root } from 'react-dom/client';
 import * as React from 'react';
 import YouTube from 'react-youtube';
 import MediaSummarizerPlugin from './main';
-import { getTranscript, summarize } from './summarizer';
+import { getTranscript, getTranscriptLines, getYouTubeMetadata, enhanceTranscript, summarize, formatRawTranscriptWithTimestamps } from './summarizer';
 import { YoutubeAPITranscript } from './youtube-api-transcript';
 
 /**
@@ -174,7 +174,7 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 				return;
 			}
 
-			const summary = await summarize(transcript, plugin.settings.openaiApiKey);
+			const summary = await summarize(transcript, plugin.settings.openaiApiKey, plugin.settings.aiModel);
 			
 			loadingNotice.hide();
 
@@ -203,7 +203,7 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 		}
 	};
 
-	const insertFullTranscript = async () => {
+	const insertEnhancedTranscript = async () => {
 		const activeFile = plugin.app.workspace.getActiveFile();
 		if (!activeFile) {
 			new Notice('No active note found. Please open a note first.');
@@ -233,17 +233,6 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 		}
 
 		try {
-			const loadingNotice = new Notice('Fetching full transcript...', 0);
-
-			const transcriptResponse = await YoutubeAPITranscript.getTranscript(mediaLink);
-			
-			loadingNotice.hide();
-
-			if (!transcriptResponse.lines || transcriptResponse.lines.length === 0) {
-				new Notice('No transcript available for this video.');
-				return;
-			}
-
 			const editor = activeView.editor;
 			
 			// Position cursor at the end of the note
@@ -251,41 +240,68 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 			const lastLineLength = editor.getLine(lastLine).length;
 			editor.setCursor(lastLine, lastLineLength);
 
-			// Format transcript with timestamps
-			const formattedTranscript = transcriptResponse.lines
-				.map((line, index) => {
-					// Validate offset and provide fallback
-					const offsetMs = typeof line.offset === 'number' && !isNaN(line.offset) ? line.offset : 0;
-					const offsetSeconds = offsetMs / 1000;
-					
-					// Validate the resulting seconds value
-					const validSeconds = isNaN(offsetSeconds) ? 0 : offsetSeconds;
-					
-					const timestamp = formatTimestamp(validSeconds);
-					
-					// If timestamp is still empty, provide a fallback
-					const finalTimestamp = timestamp || "00:00";
-					
-					// Debug log for problematic entries
-					if (!timestamp || timestamp.includes('NaN')) {
-						console.warn(`Invalid timestamp at line ${index}:`, {
-							originalOffset: line.offset,
-							offsetMs,
-							offsetSeconds,
-							validSeconds,
-							timestamp,
-							text: line.text
-						});
-					}
-					
-					return `[${finalTimestamp}]() - ${line.text}`;
-				})
-				.join('\n');
+			let loadingNotice = new Notice('Fetching transcript...', 0);
 
-			const transcriptText = `\n\n## Transcript\n\n${formattedTranscript}\n`;
+			// Get raw transcript
+			const rawTranscript = await getTranscript(mediaLink);
+			
+			if (rawTranscript.startsWith('Error:')) {
+				loadingNotice.hide();
+				new Notice(rawTranscript);
+				return;
+			}
+
+			let finalTranscript: string;
+
+			if (plugin.settings.enhancedTranscriptFormatting) {
+				// Enhanced formatting enabled - get transcript lines and metadata
+				loadingNotice.hide();
+				loadingNotice = new Notice('Getting transcript with timestamps...', 0);
+
+				try {
+					// Get raw transcript lines with timing data
+					const transcriptLines = await getTranscriptLines(mediaLink);
+					
+					loadingNotice.hide();
+					loadingNotice = new Notice('Getting video metadata...', 0);
+
+					// Get video metadata
+					const metadata = await getYouTubeMetadata(mediaLink);
+					
+					loadingNotice.hide();
+					loadingNotice = new Notice('Enhancing transcript with AI...', 0);
+
+					// Enhance transcript with AI using timestamp data
+					const enhancedTranscript = await enhanceTranscript(transcriptLines, metadata, plugin.settings.openaiApiKey, plugin.settings.aiModel);
+					
+					if (enhancedTranscript.startsWith('Error:')) {
+						loadingNotice.hide();
+						new Notice(`${enhancedTranscript} Falling back to raw transcript.`);
+						// Fall back to raw transcript
+						finalTranscript = rawTranscript;
+					} else {
+						finalTranscript = enhancedTranscript;
+					}
+				} catch (error) {
+					loadingNotice.hide();
+					new Notice(`Error getting transcript with timestamps. Falling back to raw transcript.`);
+					console.error('Error getting transcript lines:', error);
+					// Fall back to raw transcript
+					finalTranscript = rawTranscript;
+				}
+			} else {
+				// Enhanced formatting disabled - use raw transcript
+				finalTranscript = rawTranscript;
+			}
+
+			loadingNotice.hide();
+
+			// Insert transcript under ## Transcript heading
+			const transcriptText = `\n\n## Enhanced Transcript\n\n${finalTranscript}\n`;
 			editor.replaceRange(transcriptText, editor.getCursor());
 
-			new Notice('Full transcript inserted!');
+			const enhancementStatus = plugin.settings.enhancedTranscriptFormatting ? 'Enhanced transcript' : 'Raw transcript';
+			new Notice(`${enhancementStatus} inserted!`);
 
 			// Scroll to show the transcript
 			const newLastLine = editor.lastLine();
@@ -294,6 +310,97 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 		} catch (error) {
 			console.error('Error inserting transcript:', error);
 			new Notice('Error fetching transcript. Please try again.');
+		}
+	};
+
+	const insertRawTranscript = async () => {
+		const activeFile = plugin.app.workspace.getActiveFile();
+		if (!activeFile) {
+			new Notice('No active note found. Please open a note first.');
+			return;
+		}
+
+		let activeView: MarkdownView | null = null;
+		
+		const currentActiveView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
+		if (currentActiveView && currentActiveView.file?.path === activeFile.path) {
+			activeView = currentActiveView;
+		} else {
+			const leaves = plugin.app.workspace.getLeavesOfType('markdown');
+			for (const leaf of leaves) {
+				const view = leaf.view as MarkdownView;
+				if (view.file?.path === activeFile.path) {
+					activeView = view;
+					plugin.app.workspace.setActiveLeaf(leaf, { focus: true });
+					break;
+				}
+			}
+		}
+
+		if (!activeView) {
+			new Notice('Cannot find editor for the active note.');
+			return;
+		}
+
+		try {
+			const editor = activeView.editor;
+			
+			// Position cursor at the end of the note
+			const lastLine = editor.lastLine();
+			const lastLineLength = editor.getLine(lastLine).length;
+			editor.setCursor(lastLine, lastLineLength);
+
+			const loadingNotice = new Notice('Fetching raw transcript with timestamps...', 0);
+
+			try {
+				// Try to get transcript lines with timing data first
+				const transcriptLines = await getTranscriptLines(mediaLink);
+				
+				if (transcriptLines && transcriptLines.length > 0) {
+					loadingNotice.hide();
+					
+					// Format with timestamps every 5 segments
+					const formattedTranscript = formatRawTranscriptWithTimestamps(transcriptLines);
+					
+					// Insert formatted transcript under ## Raw Transcript heading
+					const transcriptText = `\n\n## Raw Transcript\n\n${formattedTranscript}\n`;
+					editor.replaceRange(transcriptText, editor.getCursor());
+
+					new Notice('Raw transcript with timestamps inserted!');
+
+					// Scroll to show the transcript
+					const newLastLine = editor.lastLine();
+					editor.scrollIntoView({ from: { line: newLastLine - 10, ch: 0 }, to: { line: newLastLine, ch: 0 } });
+					
+					return;
+				}
+			} catch (linesError) {
+				console.log('Failed to get transcript lines, falling back to plain text:', linesError.message);
+			}
+
+			// Fallback to plain text transcript if timing data fails
+			const rawTranscript = await getTranscript(mediaLink);
+			
+			loadingNotice.hide();
+
+			if (rawTranscript.startsWith('Error:')) {
+				new Notice(rawTranscript);
+				return;
+			}
+
+			// Insert plain text transcript under ## Raw Transcript heading
+			const transcriptText = `\n\n## Raw Transcript\n\n${rawTranscript}\n`;
+			editor.replaceRange(transcriptText, editor.getCursor());
+
+			new Notice('Raw transcript inserted!');
+
+			// Scroll to show the transcript
+			const newLastLine = editor.lastLine();
+			editor.scrollIntoView({ from: { line: newLastLine - 10, ch: 0 }, to: { line: newLastLine, ch: 0 } });
+
+		} catch (error) {
+			console.error('Error inserting raw transcript:', error);
+			new Notice('Error fetching raw transcript. Please try again.');
 		}
 	};
 
@@ -340,9 +447,15 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 					</button>
 					<button 
 						className="media-summarizer-btn media-summarizer-transcript-btn"
-						onClick={insertFullTranscript}
+						onClick={insertEnhancedTranscript}
 					>
-						📄 Insert Transcript
+						📄 Enhanced Transcript
+					</button>
+					<button 
+						className="media-summarizer-btn media-summarizer-raw-transcript-btn"
+						onClick={insertRawTranscript}
+					>
+						📄 Raw Transcript
 					</button>
 				</div>
 			)}
