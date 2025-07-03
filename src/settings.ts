@@ -8,6 +8,10 @@ export interface MediaSummarizerSettings {
 	openaiApiKey: string;
 	aiModel: string;
 	enhancedTranscriptFormatting: boolean;
+	checkExternalTranscripts: boolean;
+	youtubeApiKey: string;
+	webscrapingApiKey: string;
+	externalTranscriptModel: string;
 	seekSeconds: number;
 	timestampOffsetSeconds: number;
 	playbackOffsetSeconds: number;
@@ -22,6 +26,10 @@ export const DEFAULT_SETTINGS: MediaSummarizerSettings = {
 	openaiApiKey: '',
 	aiModel: 'gpt-4o-mini',
 	enhancedTranscriptFormatting: true,
+	checkExternalTranscripts: false,
+	youtubeApiKey: '',
+	webscrapingApiKey: '',
+	externalTranscriptModel: 'gpt-4o-mini',
 	seekSeconds: 10,
 	timestampOffsetSeconds: 2,
 	playbackOffsetSeconds: 2,
@@ -117,6 +125,63 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 		containerEl.createEl('div', {
 			cls: 'setting-item-description',
 			text: '💡 Enhancement uses video title and description to improve name spelling and speaker identification.'
+		});
+
+		// External transcript setting
+		new Setting(containerEl)
+			.setName('Check for external transcripts')
+			.setDesc('Check video descriptions for links to external transcripts (requires YouTube Data API key)')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.checkExternalTranscripts)
+				.onChange(async (value) => {
+					this.plugin.settings.checkExternalTranscripts = value;
+					await this.plugin.saveSettings();
+				}));
+
+		// YouTube Data API Key setting
+		new Setting(containerEl)
+			.setName('YouTube Data API Key')
+			.setDesc('Enter your YouTube Data API v3 key to extract video descriptions. Get your key from Google Cloud Console with YouTube Data API v3 enabled.')
+			.addText(text => text
+				.setPlaceholder('AIzaSy...')
+				.setValue(this.plugin.settings.youtubeApiKey)
+				.onChange(async (value) => {
+					this.plugin.settings.youtubeApiKey = value;
+					await this.plugin.saveSettings();
+				}));
+
+		// WebScraping.AI API Key setting
+		new Setting(containerEl)
+			.setName('WebScraping.AI API Key')
+			.setDesc('Enter your WebScraping.AI API key to enable external transcript fetching. Get your key from https://webscraping.ai')
+			.addText(text => text
+				.setPlaceholder('your-webscraping-ai-key')
+				.setValue(this.plugin.settings.webscrapingApiKey)
+				.onChange(async (value) => {
+					this.plugin.settings.webscrapingApiKey = value;
+					await this.plugin.saveSettings();
+				}));
+
+		// External transcript model setting
+		new Setting(containerEl)
+			.setName('External Transcript Model')
+			.setDesc('Choose the OpenAI model for external transcript extraction and formatting')
+			.addDropdown(dropdown => dropdown
+				.addOptions({
+					'gpt-4o-mini': 'GPT-4o-mini (Recommended - Fast & efficient)',
+					'gpt-4o': 'GPT-4o (Latest - Highest accuracy)',
+					'gpt-4-turbo': 'GPT-4-turbo (High accuracy)'
+				})
+				.setValue(this.plugin.settings.externalTranscriptModel)
+				.onChange(async (value) => {
+					this.plugin.settings.externalTranscriptModel = value;
+					await this.plugin.saveSettings();
+				}));
+
+		// External transcript details
+		containerEl.createEl('div', {
+			cls: 'setting-item-description',
+			text: '💡 External transcript detection extracts URLs from video descriptions using YouTube Data API, then scrapes them for transcripts using WebScraping.AI. Requires both YouTube Data API and WebScraping.AI API keys.'
 		});
 
 		// Video Controls Section

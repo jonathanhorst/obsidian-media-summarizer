@@ -3,7 +3,7 @@ import { createRoot, Root } from 'react-dom/client';
 import * as React from 'react';
 import YouTube from 'react-youtube';
 import MediaSummarizerPlugin from './main';
-import { getTranscript, getTranscriptLines, getYouTubeMetadata, enhanceTranscript, summarize, formatRawTranscriptWithTimestamps } from './summarizer';
+import { getTranscript, getTranscriptLines, getYouTubeMetadataAPI, enhanceTranscript, summarize, formatRawTranscriptWithTimestamps, checkForExternalTranscript, scrapeSelectedUrl } from './summarizer';
 import { YoutubeAPITranscript } from './youtube-api-transcript';
 
 /**
@@ -71,12 +71,46 @@ interface MediaPlayerProps {
 
 const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, ytRef }) => {
 	const [isReady, setIsReady] = React.useState(false);
+	const [externalTranscriptData, setExternalTranscriptData] = React.useState<{text: string, sourceUrl: string} | null>(null);
+	const [foundUrls, setFoundUrls] = React.useState<string[]>([]);
+	const [showUrlModal, setShowUrlModal] = React.useState(false);
+	const [urlsSearched, setUrlsSearched] = React.useState(false);
 
 	const videoId = getVideoId(mediaLink);
 
 	const handleReady = () => {
 		setIsReady(true);
 		onReady();
+	};
+
+	// Search for external transcript URLs when button is clicked
+	const searchForExternalUrls = async () => {
+		if (!plugin.settings.youtubeApiKey || !plugin.settings.openaiApiKey || !plugin.settings.webscrapingApiKey) {
+			new Notice('Please configure YouTube Data API, OpenAI, and WebScraping.AI API keys in settings');
+			return;
+		}
+
+		const loadingNotice = new Notice('Searching for external transcript URLs...', 0);
+		
+		try {
+			const result = await checkForExternalTranscript(mediaLink, plugin.settings.youtubeApiKey, plugin.settings.openaiApiKey, plugin.settings.webscrapingApiKey, plugin.settings.externalTranscriptModel);
+			
+			loadingNotice.hide();
+			
+			if (result && result.urls && result.urls.length > 0) {
+				console.log(`Found ${result.urls.length} potential transcript URLs`);
+				setFoundUrls(result.urls);
+				setUrlsSearched(true);
+				setShowUrlModal(true);
+			} else {
+				setUrlsSearched(true);
+				new Notice('No potential transcript URLs found in video description');
+			}
+		} catch (error) {
+			loadingNotice.hide();
+			console.error('Error checking for external transcript:', error);
+			new Notice('Error searching for external transcripts');
+		}
 	};
 
 	const insertTimestamp = async () => {
@@ -265,8 +299,8 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 					loadingNotice.hide();
 					loadingNotice = new Notice('Getting video metadata...', 0);
 
-					// Get video metadata
-					const metadata = await getYouTubeMetadata(mediaLink);
+					// Get video metadata using YouTube Data API v3
+					const metadata = await getYouTubeMetadataAPI(mediaLink, plugin.settings.youtubeApiKey);
 					
 					loadingNotice.hide();
 					loadingNotice = new Notice('Enhancing transcript with AI...', 0);
@@ -404,6 +438,115 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 		}
 	};
 
+	// Helper function to insert external transcript with provided data
+	const insertExternalTranscriptWithData = async (data: {text: string, sourceUrl: string}) => {
+		const activeFile = plugin.app.workspace.getActiveFile();
+		if (!activeFile) {
+			new Notice('No active note found. Please open a note first.');
+			return;
+		}
+
+		let activeView: MarkdownView | null = null;
+		
+		const currentActiveView = plugin.app.workspace.getActiveViewOfType(MarkdownView);
+		if (currentActiveView && currentActiveView.file?.path === activeFile.path) {
+			activeView = currentActiveView;
+		} else {
+			const leaves = plugin.app.workspace.getLeavesOfType('markdown');
+			for (const leaf of leaves) {
+				const view = leaf.view as MarkdownView;
+				if (view.file?.path === activeFile.path) {
+					activeView = view;
+					plugin.app.workspace.setActiveLeaf(leaf, { focus: true });
+					break;
+				}
+			}
+		}
+
+		if (!activeView) {
+			new Notice('Cannot find editor for the active note.');
+			return;
+		}
+
+		try {
+			const editor = activeView.editor;
+			
+			// Position cursor at the end of the note
+			const lastLine = editor.lastLine();
+			const lastLineLength = editor.getLine(lastLine).length;
+			editor.setCursor(lastLine, lastLineLength);
+
+			// Insert external transcript with source attribution showing full URL
+			const transcriptText = `\n\n## Transcript\n\n*Source: [${data.sourceUrl}](${data.sourceUrl})*\n\n${data.text}\n`;
+			editor.replaceRange(transcriptText, editor.getCursor());
+
+			// Scroll to show the transcript
+			const newLastLine = editor.lastLine();
+			editor.scrollIntoView({ from: { line: newLastLine - 10, ch: 0 }, to: { line: newLastLine, ch: 0 } });
+
+		} catch (error) {
+			console.error('Error inserting external transcript:', error);
+			new Notice('Error inserting external transcript. Please try again.');
+			throw error;
+		}
+	};
+
+	const insertExternalTranscript = async () => {
+		if (!externalTranscriptData) {
+			new Notice('No external transcript available.');
+			return;
+		}
+
+		try {
+			await insertExternalTranscriptWithData(externalTranscriptData);
+			const domain = new URL(externalTranscriptData.sourceUrl).hostname;
+			new Notice(`External transcript from ${domain} inserted!`);
+		} catch (error) {
+			// Error already logged in helper function
+		}
+	};
+
+	// Handle URL selection for external transcript scraping
+	const handleUrlSelection = async (selectedUrl: string) => {
+		setShowUrlModal(false);
+		
+		// Validate API keys
+		if (!plugin.settings.webscrapingApiKey || !plugin.settings.openaiApiKey) {
+			new Notice('Please configure WebScraping.AI and OpenAI API keys in settings');
+			return;
+		}
+
+		const loadingNotice = new Notice('Scraping external transcript...', 0);
+
+		try {
+			const result = await scrapeSelectedUrl(
+				selectedUrl,
+				plugin.settings.openaiApiKey,
+				plugin.settings.webscrapingApiKey,
+				plugin.settings.externalTranscriptModel
+			);
+
+			loadingNotice.hide();
+
+			if (result) {
+				console.log('External transcript scraped successfully');
+				setExternalTranscriptData(result);
+				
+				// Auto-inject the transcript immediately
+				await insertExternalTranscriptWithData(result);
+				
+				new Notice('External transcript automatically inserted into note!');
+			} else {
+				new Notice('No transcript found on the selected webpage');
+			}
+
+		} catch (error) {
+			loadingNotice.hide();
+			console.error('Error scraping external transcript:', error);
+			new Notice('Error scraping external transcript. Please try again.');
+		}
+	};
+
 	if (!videoId) {
 		return (
 			<div className="media-summarizer-placeholder">
@@ -457,6 +600,52 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 					>
 						📄 Raw Transcript
 					</button>
+					{plugin.settings.checkExternalTranscripts && (
+						<button 
+							className="media-summarizer-btn media-summarizer-external-search-btn"
+							onClick={searchForExternalUrls}
+							disabled={!plugin.settings.openaiApiKey || !plugin.settings.webscrapingApiKey}
+							title={!plugin.settings.openaiApiKey || !plugin.settings.webscrapingApiKey ? 
+								'Configure API keys in settings to enable' : 
+								'Search video description for external transcript links'
+							}
+						>
+							🔍 Find External
+						</button>
+					)}
+				</div>
+			)}
+
+			{/* URL Selection Modal */}
+			{showUrlModal && foundUrls.length > 0 && (
+				<div className="media-summarizer-modal-overlay">
+					<div className="media-summarizer-modal">
+						<h3>Select URL to Scrape for Transcript</h3>
+						<p>Found {foundUrls.length} potential transcript URLs in the video description:</p>
+						<div className="media-summarizer-url-list">
+							{foundUrls.map((url, index) => (
+								<div key={index} className="media-summarizer-url-item">
+									<button
+										className="media-summarizer-url-btn"
+										onClick={() => handleUrlSelection(url)}
+										title={url}
+									>
+										<span className="url-index">{index + 1}.</span>
+										<span className="url-domain">{new URL(url).hostname}</span>
+										<span className="url-path">{new URL(url).pathname.substring(0, 50)}...</span>
+									</button>
+								</div>
+							))}
+						</div>
+						<div className="media-summarizer-modal-buttons">
+							<button
+								className="media-summarizer-btn"
+								onClick={() => setShowUrlModal(false)}
+							>
+								Cancel
+							</button>
+						</div>
+					</div>
 				</div>
 			)}
 		</div>

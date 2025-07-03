@@ -262,32 +262,245 @@ export async function getTranscriptLines(url: string): Promise<TranscriptLine[]>
 }
 
 /**
- * Get YouTube video metadata using oEmbed API
+ * Extract description from YouTube page HTML
+ * @param htmlContent - YouTube page HTML content
+ * @returns Video description text
+ */
+function extractYouTubeDescription(htmlContent: string): string {
+	try {
+		// Try to find description in ytInitialData
+		const ytInitialDataMatch = htmlContent.match(/var ytInitialData = ({.*?});/);
+		
+		if (!ytInitialDataMatch) {
+			return tryFallbackDescriptionExtraction(htmlContent);
+		}
+
+		const data = JSON.parse(ytInitialDataMatch[1]);
+		
+		// Method 1: Try videoSecondaryInfoRenderer.description path (most common current format)
+		try {
+			const videoSecondaryInfo = data?.contents?.twoColumnWatchNextResults?.results?.results?.contents
+				?.find((content: any) => content?.videoSecondaryInfoRenderer);
+			
+			if (videoSecondaryInfo?.videoSecondaryInfoRenderer?.description?.runs) {
+				const description = videoSecondaryInfo.videoSecondaryInfoRenderer.description.runs
+					.map((run: any) => run.text).join('');
+				return description;
+			}
+			
+			// Alternative: Try attributedDescription (newer format)
+			if (videoSecondaryInfo?.videoSecondaryInfoRenderer?.attributedDescription?.content) {
+				return videoSecondaryInfo.videoSecondaryInfoRenderer.attributedDescription.content;
+			}
+		} catch (e) {
+			// Continue to next method
+		}
+
+		// Method 2: Try microformat
+		try {
+			const microformat = data?.microformat?.playerMicroformatRenderer?.description?.simpleText;
+			if (microformat) {
+				return microformat;
+			}
+		} catch (e) {
+			// Continue to next method
+		}
+
+		// Method 3: Search recursively for any description-like data
+		const recursiveDescription = searchForDescriptionRecursively(data);
+		if (recursiveDescription) {
+			return recursiveDescription;
+		}
+		return tryFallbackDescriptionExtraction(htmlContent);
+
+	} catch (error) {
+		console.error('❌ Error extracting YouTube description:', error);
+		return tryFallbackDescriptionExtraction(htmlContent);
+	}
+}
+
+
+/**
+ * Recursively search YouTube data structure for description content
+ */
+function searchForDescriptionRecursively(obj: any, path = '', maxDepth = 5): string | null {
+	if (maxDepth <= 0 || !obj || typeof obj !== 'object') return null;
+
+	for (const key in obj) {
+		if (key.toLowerCase().includes('description')) {
+			const value = obj[key];
+			
+			// If it's a runs array (common YouTube format)
+			if (Array.isArray(value) && value.length > 0 && value[0]?.text) {
+				const text = value.map((run: any) => run.text || '').join('');
+				if (text.length > 50) { // Reasonable description length
+					console.log(`🎯 Found description at path: ${path}.${key}`);
+					return text;
+				}
+			}
+			
+			// If it's a simple text value
+			if (typeof value === 'string' && value.length > 50) {
+				console.log(`🎯 Found description at path: ${path}.${key}`);
+				return value;
+			}
+		}
+		
+		// Recurse into objects and arrays
+		if (typeof obj[key] === 'object' && obj[key] !== null) {
+			const result = searchForDescriptionRecursively(obj[key], `${path}.${key}`, maxDepth - 1);
+			if (result) return result;
+		}
+	}
+	
+	return null;
+}
+
+/**
+ * Fallback description extraction methods
+ */
+function tryFallbackDescriptionExtraction(htmlContent: string): string {
+	// Fallback 1: Meta description tag
+	const metaDescMatch = htmlContent.match(/<meta\s+name="description"\s+content="([^"]*)">/);
+	if (metaDescMatch && metaDescMatch[1].length > 10) {
+		return metaDescMatch[1];
+	}
+
+	// Fallback 2: Property meta tag
+	const propertyDescMatch = htmlContent.match(/<meta\s+property="og:description"\s+content="([^"]*)">/);
+	if (propertyDescMatch && propertyDescMatch[1].length > 10) {
+		return propertyDescMatch[1];
+	}
+
+	// Fallback 3: JSON-LD structured data
+	const jsonLdMatch = htmlContent.match(/<script type="application\/ld\+json"[^>]*>(.*?)<\/script>/);
+	if (jsonLdMatch) {
+		try {
+			const jsonData = JSON.parse(jsonLdMatch[1]);
+			if (jsonData.description && jsonData.description.length > 10) {
+				return jsonData.description;
+			}
+		} catch (e) {
+			// Continue to return empty
+		}
+	}
+
+	return '';
+}
+
+/**
+ * Get YouTube video metadata using YouTube Data API v3
+ * @param url - YouTube URL
+ * @param youtubeApiKey - YouTube Data API v3 key
+ * @returns Promise<object> - Video metadata (title, channel, description, duration)
+ */
+export async function getYouTubeMetadataAPI(url: string, youtubeApiKey: string): Promise<{title: string, channel: string, description: string, durationSeconds?: number}> {
+	try {
+		const videoId = extractVideoId(url);
+		if (!videoId) {
+			throw new Error('Invalid YouTube URL format');
+		}
+
+		console.log('🔍 Fetching metadata using YouTube Data API v3...');
+		const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${youtubeApiKey}`;
+		
+		const response = await requestUrl({
+			url: apiUrl,
+			method: 'GET',
+			headers: {
+				'User-Agent': 'Mozilla/5.0 (compatible; MediaSummarizer/1.0)'
+			}
+		});
+
+		if (response.status !== 200) {
+			throw new Error(`YouTube API failed: ${response.status} ${response.text}`);
+		}
+
+		const data = JSON.parse(response.text);
+		
+		if (!data.items || data.items.length === 0) {
+			throw new Error('Video not found in YouTube API response');
+		}
+
+		const video = data.items[0];
+		const snippet = video.snippet;
+		const contentDetails = video.contentDetails;
+
+		// Parse duration from ISO 8601 format (PT4M13S -> 253 seconds)
+		let durationSeconds: number | undefined;
+		if (contentDetails?.duration) {
+			const match = contentDetails.duration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+			if (match) {
+				const hours = parseInt(match[1] || '0');
+				const minutes = parseInt(match[2] || '0'); 
+				const seconds = parseInt(match[3] || '0');
+				durationSeconds = hours * 3600 + minutes * 60 + seconds;
+			}
+		}
+
+		console.log('✅ Successfully fetched metadata via YouTube Data API v3');
+		console.log('📝 Description length:', snippet.description.length, 'characters');
+
+		return {
+			title: snippet.title || 'Unknown Title',
+			channel: snippet.channelTitle || 'Unknown Channel',
+			description: snippet.description || '',
+			durationSeconds
+		};
+
+	} catch (error) {
+		console.error('❌ YouTube Data API v3 failed:', error.message);
+		// Fallback to HTML scraping if API fails
+		console.log('🔄 Falling back to HTML scraping...');
+		return getYouTubeMetadataHTML(url);
+	}
+}
+
+/**
+ * Get YouTube video metadata by parsing the video page (fallback method)
  * @param url - YouTube URL
  * @returns Promise<object> - Video metadata (title, channel, description, duration)
  */
-export async function getYouTubeMetadata(url: string): Promise<{title: string, channel: string, description: string, durationSeconds?: number}> {
+export async function getYouTubeMetadataHTML(url: string): Promise<{title: string, channel: string, description: string, htmlContent?: string, durationSeconds?: number}> {
 	try {
-		// Use YouTube oEmbed API - no API key required
+		// First try oEmbed for basic metadata
 		const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
 		
-		const response = await requestUrl({
-			url: oembedUrl,
+		let title = 'Unknown Title';
+		let channel = 'Unknown Channel';
+		
+		try {
+			const oembedResponse = await requestUrl({
+				url: oembedUrl,
+				method: 'GET',
+				headers: {
+					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+				}
+			});
+			
+			const oembedData: YouTubeOEmbedResponse = JSON.parse(oembedResponse.text);
+			title = oembedData.title || title;
+			channel = oembedData.author_name || channel;
+		} catch (oembedError) {
+			console.log('oEmbed failed, will extract from page HTML');
+		}
+
+		// Fetch the full page to get description
+		const pageResponse = await requestUrl({
+			url: url,
 			method: 'GET',
 			headers: {
 				'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
 			}
 		});
 
-		const oembedData: YouTubeOEmbedResponse = JSON.parse(response.text);
-		
-		// oEmbed only provides title and channel, description would need YouTube Data API
-		// For now, we'll use what we can get reliably
+		const description = extractYouTubeDescription(pageResponse.text);
+
 		return {
-			title: oembedData.title || 'Unknown Title',
-			channel: oembedData.author_name || 'Unknown Channel',
-			description: '' // Would need YouTube Data API key for description
-			// Duration will be calculated from transcript data when available
+			title,
+			channel,
+			description,
+			htmlContent: pageResponse.text // Include HTML content for URL extraction
 		};
 		
 	} catch (error) {
@@ -295,8 +508,761 @@ export async function getYouTubeMetadata(url: string): Promise<{title: string, c
 		return {
 			title: 'Unknown Title',
 			channel: 'Unknown Channel', 
-			description: ''
+			description: '',
+			htmlContent: ''
 		};
+	}
+}
+
+/**
+ * Extract and filter URLs from description that might contain transcripts
+ * @param description - YouTube video description
+ * @returns Array of potential transcript URLs
+ */
+/**
+ * Extract full URLs from YouTube redirect links in page HTML
+ * @param htmlContent - Full YouTube page HTML content
+ * @returns Array of full URLs extracted from redirect links
+ */
+function extractFullUrlsFromRedirectLinks(htmlContent: string): string[] {
+	const urls: string[] = [];
+	
+	// Find all YouTube redirect links
+	const redirectRegex = /https:\/\/www\.youtube\.com\/redirect\?[^"']*/g;
+	const redirectLinks = htmlContent.match(redirectRegex) || [];
+	
+	redirectLinks.forEach(redirectLink => {
+		// Handle escaped unicode characters first (YouTube uses \u0026 instead of &)
+		const unescapedLink = redirectLink.replace(/\\u0026/g, '&');
+		
+		// Extract the 'q' parameter which contains the actual URL
+		const urlMatch = unescapedLink.match(/[&?]q=([^&]*)/);
+		if (urlMatch) {
+			try {
+				const decodedUrl = decodeURIComponent(urlMatch[1]);
+				urls.push(decodedUrl);
+			} catch (error) {
+				console.log('Error decoding URL:', urlMatch[1]);
+			}
+		}
+	});
+	
+	return urls;
+}
+
+export function findPotentialTranscriptUrls(description: string): string[] {
+	if (!description) {
+		console.log('📭 No description provided for URL extraction');
+		return [];
+	}
+
+	console.log('🔍 Extracting URLs from description...');
+	console.log('📝 Description length:', description.length, 'characters');
+
+	// Add detailed URL logging to file
+	const logToFile = (message: string) => {
+		console.log(message);
+		try {
+			const fs = require('fs');
+			fs.appendFileSync('/Users/jonathanhorst/development/youtube-plugin/console-logs.txt', message + '\n');
+		} catch (error) {
+			console.log('Could not write to log file:', error);
+		}
+	};
+
+	// Extract URLs from description text (now these should be full URLs from API v3!)
+	const urlRegex = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g;
+	const urls = description.match(urlRegex) || [];
+	logToFile(`🔗 Found ${urls.length} URLs in description: ${JSON.stringify(urls)}`);
+
+	console.log('🔗 Found', urls.length, 'total URLs:', urls);
+	
+	// Log each URL with full details
+	urls.forEach((url, index) => {
+		logToFile(`🔗 URL ${index + 1}: ${url}`);
+		logToFile(`🔗 URL ${index + 1} Length: ${url.length} characters`);
+	});
+
+	if (urls.length === 0) {
+		console.log('❌ No URLs found in description');
+		return [];
+	}
+
+	// Filter URLs that are likely to contain transcripts
+	const transcriptUrls = urls.filter((url, index) => {
+		const lowerUrl = url.toLowerCase();
+		
+		// Get text around the URL for context
+		const urlIndex = description.indexOf(url);
+		const contextStart = Math.max(0, urlIndex - 100);
+		const contextEnd = Math.min(description.length, urlIndex + url.length + 100);
+		const context = description.slice(contextStart, contextEnd).toLowerCase();
+
+		// Enhanced positive indicators
+		const transcriptKeywords = [
+			'transcript', 'show notes', 'shownotes', 'episode notes',
+			'full transcript', 'detailed notes', 'episode transcript',
+			'blog post', 'summary', 'notes', 'article', 'post',
+			'read more', 'full details', 'complete', 'written',
+			'text version', 'written version', 'blog', 'website'
+		];
+
+		const podcastDomains = [
+			'transistor.fm', 'anchor.fm', 'buzzsprout.com', 'libsyn.com',
+			'simplecast.com', 'fireside.fm', 'castos.com', 'captivate.fm',
+			'spotify.com', 'medium.com', 'substack.com', 'notion.so',
+			'github.io', 'netlify.app', 'vercel.app', 'herokuapp.com',
+			'wordpress.com', 'blogspot.com', 'ghost.io'
+		];
+
+		// Enhanced negative indicators (exclude these)
+		const excludeKeywords = [
+			'twitter.com', 'facebook.com', 'instagram.com', 'linkedin.com',
+			'youtube.com', 'youtu.be', 'tiktok.com', 'twitch.tv',
+			'discord.gg', 'reddit.com',
+			'amazon.com', 'amzn.to', 'bit.ly', 'tinyurl.com',
+			'patreon.com', 'ko-fi.com', 'buymeacoffee.com'
+		];
+
+		// Check for exclusions first
+		const hasExcludeKeywords = excludeKeywords.some(keyword => {
+			const excluded = lowerUrl.includes(keyword);
+			if (excluded) {
+				console.log(`   ❌ Excluded due to keyword: ${keyword}`);
+			}
+			return excluded;
+		});
+
+		if (hasExcludeKeywords) {
+			return false;
+		}
+
+		// Check for positive indicators
+		const hasTranscriptKeywords = transcriptKeywords.some(keyword => {
+			const inContext = context.includes(keyword);
+			const inUrl = lowerUrl.includes(keyword.replace(' ', '')) || lowerUrl.includes(keyword.replace(' ', '-'));
+			return inContext || inUrl;
+		});
+
+		// Check for podcast domains
+		const isPodcastDomain = podcastDomains.some(domain => lowerUrl.includes(domain));
+
+		// Be more permissive - include personal domains and common content sites
+		const isContentDomain = /\.(com|org|net|io|co|me|blog)\//.test(lowerUrl) && 
+							   !lowerUrl.includes('google.') && 
+							   !lowerUrl.includes('apple.') &&
+							   !lowerUrl.includes('microsoft.');
+
+		const shouldInclude = hasTranscriptKeywords || isPodcastDomain || (isContentDomain && urls.length <= 3);
+		
+		return shouldInclude;
+	});
+
+	console.log('🎯 Filtered to', transcriptUrls.length, 'potential transcript URLs:', transcriptUrls);
+	
+	// Log filtered URLs with full details
+	transcriptUrls.forEach((url, index) => {
+		logToFile(`🎯 Filtered URL ${index + 1}: ${url}`);
+		logToFile(`🎯 Filtered URL ${index + 1} Length: ${url.length} characters`);
+	});
+
+	// Remove duplicates and return
+	const uniqueUrls = [...new Set(transcriptUrls)];
+	console.log('📋 Final unique URLs:', uniqueUrls);
+	
+	// Log final URLs with full details
+	uniqueUrls.forEach((url, index) => {
+		logToFile(`📋 Final URL ${index + 1}: ${url}`);
+		logToFile(`📋 Final URL ${index + 1} Length: ${url.length} characters`);
+	});
+	
+	return uniqueUrls;
+}
+
+/**
+ * Analyze webpage content using OpenAI to extract and format transcript
+ * @param content - HTML content of the page
+ * @param openaiApiKey - OpenAI API key for analysis
+ * @param model - OpenAI model to use for analysis
+ * @returns Object with transcript detection results and extracted text if found
+ */
+async function analyzeContentForTranscript(content: string, openaiApiKey: string, model: string): Promise<{isTranscript: boolean, text: string, confidence: number}> {
+	try {
+		console.log('🤖 Starting LLM-based webpage content analysis...');
+		
+		// Add comprehensive step-by-step debugging to file
+		const logToFile = (message: string) => {
+			console.log(message);
+			// Also append to file for analysis
+			try {
+				const fs = require('fs');
+				fs.appendFileSync('/Users/jonathanhorst/development/youtube-plugin/console-logs.txt', message + '\n');
+			} catch (error) {
+				console.log('Could not write to log file:', error);
+			}
+		};
+
+		logToFile(`🔍 DEBUGGING: Original content length: ${content.length} characters`);
+		logToFile(`🔍 DEBUGGING: Content preview (first 500 chars): ${content.substring(0, 500)}`);
+		
+		// Clean up HTML content for analysis - preserve more structure for transcript detection
+		// Step 1: Remove scripts
+		let step1 = content.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
+		logToFile(`🔍 STEP 1 - After removing scripts: ${step1.length} characters (removed ${content.length - step1.length})`);
+		
+		// Step 2: Remove styles
+		let step2 = step1.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+		logToFile(`🔍 STEP 2 - After removing styles: ${step2.length} characters (removed ${step1.length - step2.length})`);
+		
+		// Step 3: Remove navigation
+		let step3 = step2.replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '');
+		logToFile(`🔍 STEP 3 - After removing nav: ${step3.length} characters (removed ${step2.length - step3.length})`);
+		
+		// Step 4: Remove headers
+		let step4 = step3.replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '');
+		logToFile(`🔍 STEP 4 - After removing headers: ${step4.length} characters (removed ${step3.length - step4.length})`);
+		
+		// Step 5: Remove footers
+		let step5 = step4.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '');
+		logToFile(`🔍 STEP 5 - After removing footers: ${step5.length} characters (removed ${step4.length - step5.length})`);
+		
+		// Step 6: Remove sidebars
+		let step6 = step5.replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '');
+		logToFile(`🔍 STEP 6 - After removing asides: ${step6.length} characters (removed ${step5.length - step6.length})`);
+		
+		// Step 7: Remove all HTML tags - ADD MORE DETAILED ANALYSIS
+		logToFile(`🔍 STEP 7 ANALYSIS - Before removing tags: ${step6.length} characters`);
+		logToFile(`🔍 STEP 7 ANALYSIS - Content sample before tag removal: ${step6.substring(0, 1000)}`);
+		
+		let step7 = step6.replace(/<[^>]*>/g, ' ');
+		logToFile(`🔍 STEP 7 - After removing HTML tags: ${step7.length} characters (removed ${step6.length - step7.length})`);
+		logToFile(`🔍 STEP 7 ANALYSIS - Content sample after tag removal: ${step7.substring(0, 1000)}`);
+		
+		// Step 8: Normalize whitespace
+		let step8 = step7.replace(/\s+/g, ' ');
+		logToFile(`🔍 STEP 8 - After normalizing whitespace: ${step8.length} characters (removed ${step7.length - step8.length})`);
+		
+		// Step 9: Trim
+		let step9 = step8.trim();
+		logToFile(`🔍 STEP 9 - After trimming: ${step9.length} characters (removed ${step8.length - step9.length})`);
+		
+		// Step 10: Substring to 20000
+		const cleanContent = step9.substring(0, 20000);
+		logToFile(`🔍 STEP 10 - After substring to 20000: ${cleanContent.length} characters (kept ${cleanContent.length} of ${step9.length})`);
+		
+		logToFile(`🔍 DEBUGGING: Final cleaned content preview (first 500 chars): ${cleanContent.substring(0, 500)}`);
+		logToFile(`📝 Cleaned content length: ${cleanContent.length} characters`);
+
+		const prompt = `Analyze this webpage content to find a podcast or video transcript. 
+
+WHAT TO LOOK FOR:
+- Sections with "transcript", "show notes", "episode transcript" 
+- Dialogue format with speaker names (e.g., "Preston:", "Host:", "Guest:")
+- Timestamp markers like [00:12:34] or timestamps
+- Long conversational text that sounds like spoken dialogue
+- Interview Q&A format
+- Any content that appears to be verbatim spoken words
+
+FORMATTING INSTRUCTIONS (if transcript found):
+- Keep ALL original spoken words exactly as written
+- Format speaker names consistently: "**Speaker Name:**" (bold)
+- Keep timestamps in format [HH:MM:SS] or [MM:SS]
+- Preserve paragraph breaks for readability
+- Convert source formatting to Markdown:
+  * Bold text: **text** (for emphasis, speaker names, key terms)
+  * Italic text: *text* (for thoughts, emphasis, book titles)
+  * Keep existing bold/italic formatting from the source
+- Remove only HTML artifacts and navigation text
+- Do NOT change, summarize, or paraphrase any dialogue
+- Maintain original structure and formatting intent
+
+RESPONSE FORMAT:
+If transcript found: Start with "TRANSCRIPT_FOUND" then the complete formatted transcript in Markdown
+If no transcript: Respond only with "NO_TRANSCRIPT"
+
+CONTENT TO ANALYZE:
+${cleanContent}`;
+
+		const openaiRequest: OpenAIRequest = {
+			model: model,
+			messages: [
+				{
+					role: 'user',
+					content: prompt
+				}
+			],
+			temperature: 0.1,
+			max_tokens: 8000
+		};
+
+		console.log(`📡 Sending content to OpenAI for analysis using ${model}...`);
+
+		const response = await requestUrl({
+			url: 'https://api.openai.com/v1/chat/completions',
+			method: 'POST',
+			headers: {
+				'Authorization': `Bearer ${openaiApiKey}`,
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify(openaiRequest)
+		});
+
+		const openaiResponse: OpenAIResponse = JSON.parse(response.text);
+
+		if (!openaiResponse.choices || openaiResponse.choices.length === 0) {
+			console.error('❌ No response received from OpenAI for content analysis');
+			return {isTranscript: false, text: '', confidence: 0};
+		}
+
+		const analysis = openaiResponse.choices[0].message.content.trim();
+		console.log(`🔍 OpenAI analysis result: ${analysis.substring(0, 100)}...`);
+
+		if (analysis.startsWith('TRANSCRIPT_FOUND')) {
+			const transcriptText = analysis.replace('TRANSCRIPT_FOUND', '').trim();
+			console.log(`✅ Transcript found! Length: ${transcriptText.length} characters`);
+			return {
+				isTranscript: true,
+				text: transcriptText,
+				confidence: 95 // High confidence when LLM confirms
+			};
+		} else {
+			console.log('❌ No transcript found by LLM analysis');
+			return {isTranscript: false, text: '', confidence: 5};
+		}
+
+	} catch (error) {
+		console.error('❌ Error in LLM content analysis:', error);
+		// Fallback to basic rule-based check
+		return analyzeContentFallback(content);
+	}
+}
+
+/**
+ * Fallback analysis when LLM analysis fails
+ */
+function analyzeContentFallback(content: string): {isTranscript: boolean, text: string, confidence: number} {
+	console.log('🔄 Using fallback rule-based analysis...');
+	
+	const textContent = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+	const transcriptIndicators = ['transcript', 'speaker:', 'host:', 'guest:', 'interview', 'dialogue'];
+	
+	let score = 0;
+	transcriptIndicators.forEach(indicator => {
+		if (textContent.toLowerCase().includes(indicator)) {
+			score += 10;
+		}
+	});
+	
+	const isTranscript = score >= 20;
+	return {
+		isTranscript,
+		text: isTranscript ? textContent.substring(0, 5000) : '',
+		confidence: score
+	};
+}
+
+/**
+ * Extract and analyze content containers from webpage
+ */
+function analyzeContentContainers(htmlContent: string): {containers: Array<{type: string, textContent: string, headings: Array<{level: number, text: string}>, html: string}>} {
+	const containers: Array<{type: string, textContent: string, headings: Array<{level: number, text: string}>, html: string}> = [];
+	
+	// Target container selectors in order of preference
+	const containerSelectors = [
+		{ selector: '[class*="transcript"]', type: 'transcript-specific' },
+		{ selector: '[id*="transcript"]', type: 'transcript-specific' },
+		{ selector: 'main', type: 'main-content' },
+		{ selector: 'article', type: 'article' },
+		{ selector: '[role="main"]', type: 'main-role' },
+		{ selector: '.content', type: 'content-class' },
+		{ selector: '.post-content', type: 'post-content' },
+		{ selector: '.entry-content', type: 'entry-content' },
+		{ selector: '#content', type: 'content-id' },
+		{ selector: '.transcript', type: 'transcript-class' }
+	];
+
+	// Create a DOM-like parser (simple regex-based)
+	containerSelectors.forEach(({selector, type}) => {
+		const matches = extractElementsBySelector(htmlContent, selector);
+		matches.forEach(match => {
+			const textContent = extractTextFromHtml(match);
+			const headings = extractHeadings(match);
+			
+			if (textContent.length > 200) { // Minimum content threshold
+				containers.push({
+					type,
+					textContent,
+					headings,
+					html: match
+				});
+			}
+		});
+	});
+
+	return {containers};
+}
+
+/**
+ * Simple HTML element extraction by selector
+ */
+function extractElementsBySelector(html: string, selector: string): string[] {
+	const elements = [];
+	
+	// Handle different selector types
+	if (selector.startsWith('[class*=')) {
+		const className = selector.match(/\[class\*="([^"]+)"\]/)?.[1];
+		if (className) {
+			const regex = new RegExp(`<[^>]+class="[^"]*${className}[^"]*"[^>]*>(.*?)<\/[^>]+>`, 'gis');
+			const matches = html.matchAll(regex);
+			for (const match of matches) {
+				elements.push(match[0]);
+			}
+		}
+	} else if (selector.startsWith('[id*=')) {
+		const idName = selector.match(/\[id\*="([^"]+)"\]/)?.[1];
+		if (idName) {
+			const regex = new RegExp(`<[^>]+id="[^"]*${idName}[^"]*"[^>]*>(.*?)<\/[^>]+>`, 'gis');
+			const matches = html.matchAll(regex);
+			for (const match of matches) {
+				elements.push(match[0]);
+			}
+		}
+	} else if (selector.startsWith('.')) {
+		const className = selector.slice(1);
+		const regex = new RegExp(`<[^>]+class="[^"]*\\b${className}\\b[^"]*"[^>]*>(.*?)<\/[^>]+>`, 'gis');
+		const matches = html.matchAll(regex);
+		for (const match of matches) {
+			elements.push(match[0]);
+		}
+	} else if (selector.startsWith('#')) {
+		const idName = selector.slice(1);
+		const regex = new RegExp(`<[^>]+id="${idName}"[^>]*>(.*?)<\/[^>]+>`, 'gis');
+		const matches = html.matchAll(regex);
+		for (const match of matches) {
+			elements.push(match[0]);
+		}
+	} else {
+		// Tag selector
+		const regex = new RegExp(`<${selector}[^>]*>(.*?)<\/${selector}>`, 'gis');
+		const matches = html.matchAll(regex);
+		for (const match of matches) {
+			elements.push(match[0]);
+		}
+	}
+	
+	return elements;
+}
+
+/**
+ * Extract headings from HTML content
+ */
+function extractHeadings(html: string): Array<{level: number, text: string}> {
+	const headings = [];
+	
+	for (let level = 1; level <= 6; level++) {
+		const regex = new RegExp(`<h${level}[^>]*>(.*?)<\/h${level}>`, 'gi');
+		const matches = html.matchAll(regex);
+		
+		for (const match of matches) {
+			const text = extractTextFromHtml(match[1]).trim();
+			if (text.length > 0) {
+				headings.push({level, text});
+			}
+		}
+	}
+	
+	return headings.sort((a, b) => a.level - b.level);
+}
+
+/**
+ * Extract clean text from HTML
+ */
+function extractTextFromHtml(html: string): string {
+	return html
+		.replace(/<script[^>]*>.*?<\/script>/gi, '')
+		.replace(/<style[^>]*>.*?<\/style>/gi, '')
+		.replace(/<nav[^>]*>.*?<\/nav>/gi, '')
+		.replace(/<aside[^>]*>.*?<\/aside>/gi, '')
+		.replace(/<footer[^>]*>.*?<\/footer>/gi, '')
+		.replace(/<[^>]+>/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+}
+
+/**
+ * Score a container for transcript likelihood
+ */
+function scoreContainerForTranscript(container: {type: string, textContent: string, headings: Array<{level: number, text: string}>}): {total: number, content: number, headings: number, structure: number} {
+	let contentScore = 0;
+	let headingScore = 0;
+	let structureScore = 0;
+
+	// Container type scoring
+	if (container.type === 'transcript-specific') structureScore += 30;
+	else if (container.type === 'main-content') structureScore += 15;
+	else if (container.type === 'article') structureScore += 12;
+	else structureScore += 5;
+
+	// Content analysis
+	const lowerContent = container.textContent.toLowerCase();
+	
+	// Transcript keywords in content
+	const transcriptKeywords = [
+		'transcript', 'speaker', 'host:', 'guest:', 'interviewer:', 'interviewee:',
+		'episode transcript', 'full transcript', '**host**', '**guest**'
+	];
+	
+	transcriptKeywords.forEach(keyword => {
+		const matches = (lowerContent.match(new RegExp(keyword, 'g')) || []).length;
+		contentScore += matches * 3;
+	});
+
+	// Dialogue patterns
+	const dialoguePatterns = [
+		/\b[A-Z][a-z]+:\s/g, // "Name: "
+		/\*\*[^*]+\*\*:/g,    // "**Name**:"
+		/\[[0-9:]+\]/g,       // "[00:00]"
+		/[0-9]+:[0-9]+/g      // "0:00"
+	];
+
+	dialoguePatterns.forEach(pattern => {
+		const matches = (container.textContent.match(pattern) || []).length;
+		contentScore += matches * 2;
+	});
+
+	// Content length scoring
+	if (container.textContent.length > 2000) contentScore += 5;
+	if (container.textContent.length > 5000) contentScore += 10;
+	if (container.textContent.length > 10000) contentScore += 15;
+
+	// Heading analysis
+	container.headings.forEach(heading => {
+		const lowerHeading = heading.text.toLowerCase();
+		
+		// Direct transcript mentions in headings
+		if (lowerHeading.includes('transcript')) {
+			headingScore += heading.level <= 2 ? 20 : 15;
+		}
+		
+		// Episode/show structure
+		if (lowerHeading.match(/episode|show|interview/)) {
+			headingScore += 8;
+		}
+		
+		// Speaker patterns in headings
+		if (lowerHeading.match(/host|guest|speaker|interviewer/)) {
+			headingScore += 6;
+		}
+		
+		// Time-based headings
+		if (lowerHeading.match(/\d+:\d+|timestamp/)) {
+			headingScore += 10;
+		}
+	});
+
+	const total = contentScore + headingScore + structureScore;
+	
+	return {
+		total,
+		content: contentScore,
+		headings: headingScore,
+		structure: structureScore
+	};
+}
+
+/**
+ * Fallback analysis for raw content when no containers found
+ */
+function analyzeRawContent(content: string): {isTranscript: boolean, text: string, confidence: number} {
+	const textContent = extractTextFromHtml(content);
+	
+	if (textContent.length < 500) {
+		return {isTranscript: false, text: '', confidence: 0};
+	}
+
+	let confidence = 0;
+	const lowerContent = textContent.toLowerCase();
+
+	// Basic transcript indicators
+	const transcriptIndicators = ['transcript', 'speaker', 'host:', 'guest:', 'interviewer:'];
+	transcriptIndicators.forEach(indicator => {
+		const matches = (lowerContent.match(new RegExp(indicator, 'g')) || []).length;
+		confidence += matches * 3;
+	});
+
+	// Length scoring
+	if (textContent.length > 2000) confidence += 5;
+	if (textContent.length > 5000) confidence += 10;
+
+	return {
+		isTranscript: confidence > 15,
+		text: confidence > 15 ? textContent : '',
+		confidence
+	};
+}
+
+/**
+ * Fetch and analyze external URL for transcript content using WebScraping.AI
+ * @param url - URL to check for transcript
+ * @param openaiApiKey - OpenAI API key for content analysis
+ * @param webscrapingApiKey - WebScraping.AI API key for content fetching
+ * @param model - OpenAI model to use for analysis
+ * @returns Promise resolving to transcript text or null
+ */
+export async function fetchExternalTranscript(url: string, openaiApiKey: string, webscrapingApiKey: string, model: string): Promise<string | null> {
+	try {
+		// Enhanced URL logging with file output
+		const logToFile = (message: string) => {
+			console.log(message);
+			try {
+				const fs = require('fs');
+				fs.appendFileSync('/Users/jonathanhorst/development/youtube-plugin/console-logs.txt', message + '\n');
+			} catch (error) {
+				console.log('Could not write to log file:', error);
+			}
+		};
+
+		logToFile('🌐 Scraping external URL for transcript: ' + url);
+		logToFile('🔍 URL DEBUGGING: Original URL: ' + url);
+		logToFile('🔍 URL DEBUGGING: Original URL length: ' + url.length);
+		logToFile('🔍 URL DEBUGGING: URL contains specific page info: ' + (url.includes('/') && !url.endsWith('/') && url.split('/').length > 3));
+
+		// Use WebScraping.AI to fetch content with detailed logging
+		const encodedUrl = encodeURIComponent(url);
+		logToFile('🔍 URL DEBUGGING: Encoded URL: ' + encodedUrl);
+		logToFile('🔍 URL DEBUGGING: Encoded URL length: ' + encodedUrl.length);
+		
+		const scrapingUrl = `https://api.webscraping.ai/html?url=${encodedUrl}&api_key=${webscrapingApiKey}`;
+		logToFile('🔍 URL DEBUGGING: Full WebScraping.AI API URL: ' + scrapingUrl);
+		logToFile('🔍 URL DEBUGGING: API URL length: ' + scrapingUrl.length);
+		
+		// Check for potential homepage indicators
+		const isLikelyHomepage = url.endsWith('/') || url.split('/').length <= 3 || url.includes('/home') || url.includes('/index');
+		logToFile('🔍 URL DEBUGGING: Likely homepage URL: ' + isLikelyHomepage);
+		
+		logToFile('📡 Fetching content via WebScraping.AI...');
+		const response = await requestUrl({
+			url: scrapingUrl,
+			method: 'GET',
+			headers: {
+				'User-Agent': 'Mozilla/5.0 (compatible; WebScrapingTest/1.0)'
+			}
+		});
+
+		// Enhanced response debugging
+		logToFile('🔍 RESPONSE DEBUGGING: Status: ' + response.status);
+		logToFile('🔍 RESPONSE DEBUGGING: Headers: ' + JSON.stringify(response.headers || {}));
+		
+		if (response.status !== 200) {
+			logToFile(`❌ WebScraping.AI failed: ${response.status} ${response.text}`);
+			return null;
+		}
+
+		const scrapedContent = response.text;
+		logToFile(`✅ Successfully scraped ${scrapedContent.length} characters from ${url}`);
+		
+		// Check if content looks like homepage vs specific page
+		const contentPreview = scrapedContent.substring(0, 1000);
+		logToFile('🔍 RESPONSE DEBUGGING: Content preview (first 1000 chars): ' + contentPreview);
+		
+		// Look for homepage indicators in content
+		const homepageIndicators = ['home', 'welcome', 'main page', 'navigation', 'menu', 'about us', 'contact us'];
+		const hasHomepageIndicators = homepageIndicators.some(indicator => 
+			contentPreview.toLowerCase().includes(indicator)
+		);
+		logToFile('🔍 RESPONSE DEBUGGING: Contains homepage indicators: ' + hasHomepageIndicators);
+		
+		// Check for episode/content specific indicators
+		const contentIndicators = ['transcript', 'episode', 'show notes', 'speaker:', 'host:', 'guest:', 'interview'];
+		const hasContentIndicators = contentIndicators.some(indicator => 
+			contentPreview.toLowerCase().includes(indicator)
+		);
+		logToFile('🔍 RESPONSE DEBUGGING: Contains content indicators: ' + hasContentIndicators);
+		
+		const analysis = await analyzeContentForTranscript(scrapedContent, openaiApiKey, model);
+		
+		console.log(`📊 Transcript analysis for ${url}: confidence=${analysis.confidence}, isTranscript=${analysis.isTranscript}`);
+
+		if (analysis.isTranscript) {
+			return analysis.text;
+		}
+
+		return null;
+
+	} catch (error) {
+		console.error('❌ Error fetching external transcript from', url, ':', error);
+		console.error('❌ Error details:', error.message);
+		return null;
+	}
+}
+
+/**
+ * Check for external transcripts in YouTube video description using YouTube Data API v3
+ * @param url - YouTube video URL
+ * @param youtubeApiKey - YouTube Data API v3 key
+ * @param openaiApiKey - OpenAI API key
+ * @param webscrapingApiKey - WebScraping.AI API key
+ * @param model - OpenAI model to use
+ * @returns Promise resolving to external transcript text and source URL, or null
+ */
+export async function checkForExternalTranscript(url: string, youtubeApiKey: string, openaiApiKey: string, webscrapingApiKey: string, model: string): Promise<{text: string, sourceUrl: string, urls: string[]} | null> {
+	try {
+		// Get video metadata using YouTube Data API v3
+		const metadata = await getYouTubeMetadataAPI(url, youtubeApiKey);
+		
+		if (!metadata.description) {
+			console.log('No description found for video');
+			return null;
+		}
+
+		// Find potential transcript URLs (full URLs from API v3)
+		const potentialUrls = findPotentialTranscriptUrls(metadata.description);
+		
+		if (potentialUrls.length === 0) {
+			console.log('No potential transcript URLs found in description');
+			return null;
+		}
+
+		console.log(`🎯 Found ${potentialUrls.length} potential transcript URLs`);
+
+		// Return URLs for user selection - don't auto-scrape
+		return {
+			text: '', // Will be filled when user selects URL
+			sourceUrl: '',
+			urls: potentialUrls
+		};
+
+	} catch (error) {
+		console.error('Error checking for external transcript:', error);
+		return null;
+	}
+}
+
+/**
+ * Scrape a specific URL selected by the user
+ * @param url - Selected URL to scrape
+ * @param openaiApiKey - OpenAI API key
+ * @param webscrapingApiKey - WebScraping.AI API key  
+ * @param model - OpenAI model to use
+ * @returns Promise resolving to transcript data or null
+ */
+export async function scrapeSelectedUrl(url: string, openaiApiKey: string, webscrapingApiKey: string, model: string): Promise<{text: string, sourceUrl: string} | null> {
+	try {
+		const transcript = await fetchExternalTranscript(url, openaiApiKey, webscrapingApiKey, model);
+		
+		if (transcript) {
+			console.log('Found external transcript at:', url);
+			return {
+				text: transcript,
+				sourceUrl: url
+			};
+		}
+
+		return null;
+
+	} catch (error) {
+		console.error('Error scraping selected URL:', error);
+		return null;
 	}
 }
 
