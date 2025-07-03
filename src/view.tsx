@@ -76,6 +76,23 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 	const [showUrlModal, setShowUrlModal] = React.useState(false);
 	const [urlsSearched, setUrlsSearched] = React.useState(false);
 
+	// ESC key handler for modal
+	React.useEffect(() => {
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.key === 'Escape' && showUrlModal) {
+				setShowUrlModal(false);
+			}
+		};
+
+		if (showUrlModal) {
+			document.addEventListener('keydown', handleKeyDown);
+		}
+
+		return () => {
+			document.removeEventListener('keydown', handleKeyDown);
+		};
+	}, [showUrlModal]);
+
 	const videoId = getVideoId(mediaLink);
 
 	const handleReady = () => {
@@ -98,7 +115,6 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 			loadingNotice.hide();
 			
 			if (result && result.urls && result.urls.length > 0) {
-				console.log(`Found ${result.urls.length} potential transcript URLs`);
 				setFoundUrls(result.urls);
 				setUrlsSearched(true);
 				setShowUrlModal(true);
@@ -409,7 +425,6 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 					return;
 				}
 			} catch (linesError) {
-				console.log('Failed to get transcript lines, falling back to plain text:', linesError.message);
 			}
 
 			// Fallback to plain text transcript if timing data fails
@@ -529,7 +544,6 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 			loadingNotice.hide();
 
 			if (result) {
-				console.log('External transcript scraped successfully');
 				setExternalTranscriptData(result);
 				
 				// Auto-inject the transcript immediately
@@ -759,7 +773,7 @@ export class MediaSummarizerView extends ItemView {
 			<MediaPlayer 
 				mediaLink={url} 
 				plugin={this.plugin}
-				onReady={() => console.log('Video player ready')}
+				onReady={() => {}}
 				ytRef={this.ytRef}
 			/>
 		);

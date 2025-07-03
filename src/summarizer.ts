@@ -64,7 +64,6 @@ function extractVideoId(url: string): string | null {
  */
 export async function getTranscript(url: string): Promise<string> {
 	try {
-		console.log('Attempting to fetch transcript using YouTube API method for:', url);
 
 		// Method 1: Try the new YouTube internal API approach first
 		try {
@@ -76,15 +75,11 @@ export async function getTranscript(url: string): Promise<string> {
 			const transcript = transcriptLinesToText(apiResult.lines);
 			
 			if (transcript && transcript.trim().length > 0) {
-				console.log('Successfully fetched transcript using YouTube API method, length:', transcript.length);
 				return transcript;
 			}
 		} catch (apiError) {
-			console.log('YouTube API method failed:', apiError.message);
 			// Continue to fallback method
 		}
-
-		console.log('Falling back to youtube-transcript library');
 
 		// Method 2: Fallback to the original youtube-transcript library
 		const videoId = extractVideoId(url);
@@ -99,16 +94,13 @@ export async function getTranscript(url: string): Promise<string> {
 
 		for (const lang of languageCodes) {
 			try {
-				console.log(`Trying youtube-transcript library with language: ${lang}`);
 				transcriptArray = await YoutubeTranscript.fetchTranscript(videoId, {
 					lang: lang
 				});
 				if (transcriptArray && transcriptArray.length > 0) {
-					console.log(`Successfully fetched transcript with language: ${lang}, entries: ${transcriptArray.length}`);
 					break;
 				}
 			} catch (langError) {
-				console.log(`Failed with language ${lang}:`, langError.message);
 				lastError = langError;
 				continue;
 			}
@@ -117,11 +109,9 @@ export async function getTranscript(url: string): Promise<string> {
 		// If no language worked, try without language specification
 		if (!transcriptArray || transcriptArray.length === 0) {
 			try {
-				console.log('Trying to fetch transcript without language specification');
-				transcriptArray = await YoutubeTranscript.fetchTranscript(videoId);
+					transcriptArray = await YoutubeTranscript.fetchTranscript(videoId);
 			} catch (generalError) {
-				console.log('Failed without language specification:', generalError.message);
-				lastError = generalError;
+					lastError = generalError;
 			}
 		}
 		
@@ -156,8 +146,7 @@ We're working on improving transcript access in future updates.`;
 			return 'Error: Transcript appears to be empty for this video.';
 		}
 
-		console.log('Successfully processed transcript using fallback method, length:', fullTranscript.length);
-		return fullTranscript;
+			return fullTranscript;
 
 	} catch (error) {
 		console.error('Error fetching transcript:', error);
@@ -182,8 +171,7 @@ We're working on improving transcript access in future updates.`;
  */
 export async function getTranscriptLines(url: string): Promise<TranscriptLine[]> {
 	try {
-		console.log('Attempting to fetch transcript lines using YouTube API method for:', url);
-
+	
 		// Method 1: Try the new YouTube internal API approach first
 		try {
 			const apiResult = await YoutubeAPITranscript.getTranscript(url, {
@@ -192,15 +180,12 @@ export async function getTranscriptLines(url: string): Promise<TranscriptLine[]>
 			});
 			
 			if (apiResult.lines && apiResult.lines.length > 0) {
-				console.log('Successfully fetched transcript lines using YouTube API method, count:', apiResult.lines.length);
 				return apiResult.lines;
 			}
 		} catch (apiError) {
-			console.log('YouTube API method failed:', apiError.message);
 			// Continue to fallback method
 		}
 
-		console.log('Falling back to youtube-transcript library for lines');
 
 		// Method 2: Fallback to the original youtube-transcript library
 		const videoId = extractVideoId(url);
@@ -215,16 +200,13 @@ export async function getTranscriptLines(url: string): Promise<TranscriptLine[]>
 
 		for (const lang of languageCodes) {
 			try {
-				console.log(`Trying youtube-transcript library with language: ${lang}`);
 				transcriptArray = await YoutubeTranscript.fetchTranscript(videoId, {
 					lang: lang
 				});
 				if (transcriptArray && transcriptArray.length > 0) {
-					console.log(`Successfully fetched transcript with language: ${lang}, entries: ${transcriptArray.length}`);
 					break;
 				}
 			} catch (langError) {
-				console.log(`Failed with language ${lang}:`, langError.message);
 				lastError = langError;
 				continue;
 			}
@@ -233,11 +215,9 @@ export async function getTranscriptLines(url: string): Promise<TranscriptLine[]>
 		// If no language worked, try without language specification
 		if (!transcriptArray || transcriptArray.length === 0) {
 			try {
-				console.log('Trying to fetch transcript without language specification');
-				transcriptArray = await YoutubeTranscript.fetchTranscript(videoId);
+					transcriptArray = await YoutubeTranscript.fetchTranscript(videoId);
 			} catch (generalError) {
-				console.log('Failed without language specification:', generalError.message);
-				lastError = generalError;
+					lastError = generalError;
 			}
 		}
 		
@@ -252,7 +232,6 @@ export async function getTranscriptLines(url: string): Promise<TranscriptLine[]>
 			duration: (item.duration || 0) * 1000 // Convert to milliseconds
 		}));
 
-		console.log('Successfully processed transcript lines using fallback method, count:', transcriptLines.length);
 		return transcriptLines;
 
 	} catch (error) {
@@ -334,14 +313,12 @@ function searchForDescriptionRecursively(obj: any, path = '', maxDepth = 5): str
 			if (Array.isArray(value) && value.length > 0 && value[0]?.text) {
 				const text = value.map((run: any) => run.text || '').join('');
 				if (text.length > 50) { // Reasonable description length
-					console.log(`🎯 Found description at path: ${path}.${key}`);
 					return text;
 				}
 			}
 			
 			// If it's a simple text value
 			if (typeof value === 'string' && value.length > 50) {
-				console.log(`🎯 Found description at path: ${path}.${key}`);
 				return value;
 			}
 		}
@@ -401,8 +378,7 @@ export async function getYouTubeMetadataAPI(url: string, youtubeApiKey: string):
 			throw new Error('Invalid YouTube URL format');
 		}
 
-		console.log('🔍 Fetching metadata using YouTube Data API v3...');
-		const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${youtubeApiKey}`;
+			const apiUrl = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${videoId}&key=${youtubeApiKey}`;
 		
 		const response = await requestUrl({
 			url: apiUrl,
@@ -438,8 +414,6 @@ export async function getYouTubeMetadataAPI(url: string, youtubeApiKey: string):
 			}
 		}
 
-		console.log('✅ Successfully fetched metadata via YouTube Data API v3');
-		console.log('📝 Description length:', snippet.description.length, 'characters');
 
 		return {
 			title: snippet.title || 'Unknown Title',
@@ -451,7 +425,6 @@ export async function getYouTubeMetadataAPI(url: string, youtubeApiKey: string):
 	} catch (error) {
 		console.error('❌ YouTube Data API v3 failed:', error.message);
 		// Fallback to HTML scraping if API fails
-		console.log('🔄 Falling back to HTML scraping...');
 		return getYouTubeMetadataHTML(url);
 	}
 }
@@ -482,7 +455,6 @@ export async function getYouTubeMetadataHTML(url: string): Promise<{title: strin
 			title = oembedData.title || title;
 			channel = oembedData.author_name || channel;
 		} catch (oembedError) {
-			console.log('oEmbed failed, will extract from page HTML');
 		}
 
 		// Fetch the full page to get description
@@ -542,7 +514,6 @@ function extractFullUrlsFromRedirectLinks(htmlContent: string): string[] {
 				const decodedUrl = decodeURIComponent(urlMatch[1]);
 				urls.push(decodedUrl);
 			} catch (error) {
-				console.log('Error decoding URL:', urlMatch[1]);
 			}
 		}
 	});
@@ -552,39 +523,21 @@ function extractFullUrlsFromRedirectLinks(htmlContent: string): string[] {
 
 export function findPotentialTranscriptUrls(description: string): string[] {
 	if (!description) {
-		console.log('📭 No description provided for URL extraction');
 		return [];
 	}
 
-	console.log('🔍 Extracting URLs from description...');
-	console.log('📝 Description length:', description.length, 'characters');
 
-	// Add detailed URL logging to file
-	const logToFile = (message: string) => {
-		console.log(message);
-		try {
-			const fs = require('fs');
-			fs.appendFileSync('/Users/jonathanhorst/development/youtube-plugin/console-logs.txt', message + '\n');
-		} catch (error) {
-			console.log('Could not write to log file:', error);
-		}
-	};
 
 	// Extract URLs from description text (now these should be full URLs from API v3!)
 	const urlRegex = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g;
 	const urls = description.match(urlRegex) || [];
-	logToFile(`🔗 Found ${urls.length} URLs in description: ${JSON.stringify(urls)}`);
 
-	console.log('🔗 Found', urls.length, 'total URLs:', urls);
 	
 	// Log each URL with full details
 	urls.forEach((url, index) => {
-		logToFile(`🔗 URL ${index + 1}: ${url}`);
-		logToFile(`🔗 URL ${index + 1} Length: ${url.length} characters`);
 	});
 
 	if (urls.length === 0) {
-		console.log('❌ No URLs found in description');
 		return [];
 	}
 
@@ -628,7 +581,6 @@ export function findPotentialTranscriptUrls(description: string): string[] {
 		const hasExcludeKeywords = excludeKeywords.some(keyword => {
 			const excluded = lowerUrl.includes(keyword);
 			if (excluded) {
-				console.log(`   ❌ Excluded due to keyword: ${keyword}`);
 			}
 			return excluded;
 		});
@@ -658,22 +610,16 @@ export function findPotentialTranscriptUrls(description: string): string[] {
 		return shouldInclude;
 	});
 
-	console.log('🎯 Filtered to', transcriptUrls.length, 'potential transcript URLs:', transcriptUrls);
 	
 	// Log filtered URLs with full details
 	transcriptUrls.forEach((url, index) => {
-		logToFile(`🎯 Filtered URL ${index + 1}: ${url}`);
-		logToFile(`🎯 Filtered URL ${index + 1} Length: ${url.length} characters`);
 	});
 
 	// Remove duplicates and return
 	const uniqueUrls = [...new Set(transcriptUrls)];
-	console.log('📋 Final unique URLs:', uniqueUrls);
 	
 	// Log final URLs with full details
 	uniqueUrls.forEach((url, index) => {
-		logToFile(`📋 Final URL ${index + 1}: ${url}`);
-		logToFile(`📋 Final URL ${index + 1} Length: ${url.length} characters`);
 	});
 	
 	return uniqueUrls;
@@ -688,7 +634,6 @@ export function findPotentialTranscriptUrls(description: string): string[] {
  */
 async function analyzeContentForTranscript(content: string, openaiApiKey: string, model: string): Promise<{isTranscript: boolean, text: string, confidence: number}> {
 	try {
-		console.log('🤖 Starting LLM-based webpage content analysis...');
 		
 		// Clean up HTML content for analysis
 		let cleanedContent = content
@@ -703,7 +648,6 @@ async function analyzeContentForTranscript(content: string, openaiApiKey: string
 			.trim()                                            // Trim
 			.substring(0, 20000);                              // Limit content size
 
-		console.log(`📝 Cleaned content length: ${cleanedContent.length} characters`);
 
 		const prompt = `Analyze this webpage content to find a podcast or video transcript. 
 
@@ -747,7 +691,6 @@ ${cleanedContent}`;
 			max_tokens: 8000
 		};
 
-		console.log(`📡 Sending content to OpenAI for analysis using ${model}...`);
 
 		const response = await requestUrl({
 			url: 'https://api.openai.com/v1/chat/completions',
@@ -767,18 +710,15 @@ ${cleanedContent}`;
 		}
 
 		const analysis = openaiResponse.choices[0].message.content.trim();
-		console.log(`🔍 OpenAI analysis result: ${analysis.substring(0, 100)}...`);
 
 		if (analysis.startsWith('TRANSCRIPT_FOUND')) {
 			const transcriptText = analysis.replace('TRANSCRIPT_FOUND', '').trim();
-			console.log(`✅ Transcript found! Length: ${transcriptText.length} characters`);
 			return {
 				isTranscript: true,
 				text: transcriptText,
 				confidence: 95 // High confidence when LLM confirms
 			};
 		} else {
-			console.log('❌ No transcript found by LLM analysis');
 			return {isTranscript: false, text: '', confidence: 5};
 		}
 
@@ -793,7 +733,6 @@ ${cleanedContent}`;
  * Fallback analysis when LLM analysis fails
  */
 function analyzeContentFallback(content: string): {isTranscript: boolean, text: string, confidence: number} {
-	console.log('🔄 Using fallback rule-based analysis...');
 	
 	const textContent = content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 	const transcriptIndicators = ['transcript', 'speaker:', 'host:', 'guest:', 'interview', 'dialogue'];
@@ -1063,7 +1002,6 @@ function analyzeRawContent(content: string): {isTranscript: boolean, text: strin
  */
 export async function fetchExternalTranscript(url: string, openaiApiKey: string, webscrapingApiKey: string, model: string): Promise<string | null> {
 	try {
-		console.log('🌐 Scraping external URL for transcript:', url);
 
 		// Use WebScraping.AI to fetch content
 		const encodedUrl = encodeURIComponent(url);
@@ -1083,11 +1021,9 @@ export async function fetchExternalTranscript(url: string, openaiApiKey: string,
 		}
 
 		const scrapedContent = response.text;
-		console.log(`✅ Successfully scraped ${scrapedContent.length} characters from ${url}`);
 		
 		const analysis = await analyzeContentForTranscript(scrapedContent, openaiApiKey, model);
 		
-		console.log(`📊 Transcript analysis for ${url}: confidence=${analysis.confidence}, isTranscript=${analysis.isTranscript}`);
 
 		if (analysis.isTranscript) {
 			return analysis.text;
@@ -1116,7 +1052,6 @@ export async function checkForExternalTranscript(url: string, youtubeApiKey: str
 		const metadata = await getYouTubeMetadataAPI(url, youtubeApiKey);
 		
 		if (!metadata.description) {
-			console.log('No description found for video');
 			return null;
 		}
 
@@ -1124,11 +1059,9 @@ export async function checkForExternalTranscript(url: string, youtubeApiKey: str
 		const potentialUrls = findPotentialTranscriptUrls(metadata.description);
 		
 		if (potentialUrls.length === 0) {
-			console.log('No potential transcript URLs found in description');
 			return null;
 		}
 
-		console.log(`🎯 Found ${potentialUrls.length} potential transcript URLs`);
 
 		// Return URLs for user selection - don't auto-scrape
 		return {
@@ -1156,7 +1089,6 @@ export async function scrapeSelectedUrl(url: string, openaiApiKey: string, websc
 		const transcript = await fetchExternalTranscript(url, openaiApiKey, webscrapingApiKey, model);
 		
 		if (transcript) {
-			console.log('Found external transcript at:', url);
 			return {
 				text: transcript,
 				sourceUrl: url
@@ -1315,11 +1247,9 @@ export async function enhanceTranscript(
 		const totalText = transcriptLines.map(line => line.text).join(' ');
 		const estimatedTokens = Math.ceil(totalText.length / 4);
 		
-		console.log(`Processing transcript with ${transcriptLines.length} segments, estimated ${estimatedTokens} tokens`);
 
 		// If transcript is too large, use chunking
 		if (estimatedTokens > 6000 || transcriptLines.length > 500) {
-			console.log('Large transcript detected, using chunking approach');
 			return await enhanceTranscriptWithChunking(transcriptLines, metadata, openaiApiKey, aiModel);
 		}
 
@@ -1454,7 +1384,6 @@ Format the output as clean markdown.`;
 			max_tokens: 4000
 		};
 
-		console.log('Enhancing transcript with OpenAI...');
 
 		const response = await requestUrl({
 			url: 'https://api.openai.com/v1/chat/completions',
@@ -1478,7 +1407,6 @@ Format the output as clean markdown.`;
 			return 'Error: Empty response received from OpenAI for transcript enhancement.';
 		}
 
-		console.log('Successfully enhanced transcript with OpenAI');
 		return enhancedTranscript;
 
 	} catch (error) {
@@ -1500,7 +1428,6 @@ async function enhanceTranscriptWithChunking(
 		const chunks = chunkTranscriptLines(transcriptLines, 6000); // Smaller chunks for safety
 		const enhancedChunks: string[] = [];
 		
-		console.log(`Processing ${chunks.length} chunks for large transcript`);
 
 		// Get overall duration info
 		const {durationSeconds} = formatTranscriptWithTimestamps(transcriptLines);
@@ -1513,7 +1440,6 @@ async function enhanceTranscriptWithChunking(
 			const chunk = chunks[i];
 			const isMultiChunk = chunks.length > 1;
 			
-			console.log(`Processing chunk ${i + 1} of ${chunks.length} (${chunk.length} segments)`);
 			
 			// Format this chunk with timestamps
 			const {formattedText: chunkTranscript} = formatTranscriptWithTimestamps(chunk);
@@ -1640,16 +1566,13 @@ Format the output as clean markdown.`;
 			
 			// Add delay between requests to avoid rate limiting
 			if (i < chunks.length - 1) {
-				console.log('Waiting 1 second before processing next chunk...');
 				await new Promise(resolve => setTimeout(resolve, 1000));
 			}
 		}
 
 		// Combine enhanced chunks
-		console.log('Combining enhanced chunks...');
 		const combinedTranscript = enhancedChunks.join('\n\n');
 		
-		console.log('Successfully enhanced large transcript with chunking');
 		return combinedTranscript;
 
 	} catch (error) {

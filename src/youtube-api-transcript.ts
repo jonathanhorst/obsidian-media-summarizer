@@ -73,17 +73,12 @@ const YOUTUBE_VIDEOID_REGEX = new RegExp(
  */
 function parseTranscript(responseContent: string): TranscriptLine[] {
 	try {
-		console.log('Raw response content length:', responseContent.length);
-		console.log('Raw response preview:', responseContent.substring(0, 500));
 		
 		const response = JSON.parse(responseContent);
-		console.log('Parsed response structure:', Object.keys(response));
 		
 		// Explore the response structure more deeply
 		if (response.actions) {
-			console.log('Actions array length:', response.actions.length);
 			response.actions.forEach((action: any, index: number) => {
-				console.log(`Action ${index} keys:`, Object.keys(action));
 			});
 		}
 		
@@ -109,9 +104,7 @@ function parseTranscript(responseContent: string): TranscriptLine[] {
 				
 				for (const key in obj) {
 					if (key.toLowerCase().includes('transcript')) {
-						console.log(`Found transcript-related key at ${path}.${key}:`, typeof obj[key]);
 						if (obj[key] && typeof obj[key] === 'object') {
-							console.log(`Transcript object keys:`, Object.keys(obj[key]));
 						}
 					}
 					
@@ -123,14 +116,11 @@ function parseTranscript(responseContent: string): TranscriptLine[] {
 				return null;
 			};
 			
-			console.log('Searching for transcript data in response...');
 			searchForTranscript(response);
 		}
 
-		console.log('Transcript events found:', transcriptEvents ? transcriptEvents.length : 'none');
 
 		if (!transcriptEvents || !Array.isArray(transcriptEvents)) {
-			console.log('No valid transcript events found in response');
 			return [];
 		}
 
@@ -152,7 +142,6 @@ function parseTranscript(responseContent: string): TranscriptLine[] {
 				text = cue.text;
 			}
 			
-			console.log(`Segment ${index} text:`, text);
 			
 			// Extract timing information
 			const startTimeMs = cue.startMs || cue.startTimeMs || "0";
@@ -166,7 +155,6 @@ function parseTranscript(responseContent: string): TranscriptLine[] {
 			const validStartTime = isNaN(startTime) ? 0 : startTime;
 			const validEndTime = isNaN(endTime) ? validStartTime + 1000 : endTime; // Default 1 second duration
 			
-			console.log(`Parsed times - Start: ${validStartTime}ms, End: ${validEndTime}ms`);
 			
 			return {
 				text: text,
@@ -283,7 +271,6 @@ export class YoutubeAPITranscript {
 		config?: TranscriptConfig,
 	): Promise<TranscriptResponse> {
 		try {
-			console.log('Fetching video page:', url);
 			
 			// First, fetch the video page using requestUrl for better CORS handling
 			const videoPageResponse = await requestUrl({
@@ -298,7 +285,6 @@ export class YoutubeAPITranscript {
 			// Parse the page to extract transcript request info
 			const videoData = parseVideoPage(videoPageBody, config);
 			
-			console.log('Making transcript API request');
 			
 			// Make the transcript API request with proper headers
 			const headers = {

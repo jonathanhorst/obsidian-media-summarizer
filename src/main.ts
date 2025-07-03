@@ -33,7 +33,6 @@ export default class MediaSummarizerPlugin extends Plugin {
 		const seconds = convertTimestampToSeconds(timestamp);
 		ytRef.current.getInternalPlayer()?.seekTo(seconds, true);
 
-		console.log(`Jumped to timestamp: ${timestamp} (${seconds} seconds)`);
 		return true;
 	};
 
@@ -41,7 +40,6 @@ export default class MediaSummarizerPlugin extends Plugin {
 	 * Plugin initialization
 	 */
 	async onload(): Promise<void> {
-		console.log('Loading Media Summarizer plugin');
 
 		// Register CodeMirror extension for timestamp clicks
 		this.registerEditorExtension([
@@ -120,7 +118,6 @@ export default class MediaSummarizerPlugin extends Plugin {
 	 * Plugin cleanup
 	 */
 	onunload(): void {
-		console.log('Unloading Media Summarizer plugin');
 		// Cleanup is handled automatically by Obsidian for registered views and events
 	}
 
