@@ -690,68 +690,20 @@ async function analyzeContentForTranscript(content: string, openaiApiKey: string
 	try {
 		console.log('🤖 Starting LLM-based webpage content analysis...');
 		
-		// Add comprehensive step-by-step debugging to file
-		const logToFile = (message: string) => {
-			console.log(message);
-			// Also append to file for analysis
-			try {
-				const fs = require('fs');
-				fs.appendFileSync('/Users/jonathanhorst/development/youtube-plugin/console-logs.txt', message + '\n');
-			} catch (error) {
-				console.log('Could not write to log file:', error);
-			}
-		};
+		// Clean up HTML content for analysis
+		let cleanedContent = content
+			.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')  // Remove scripts
+			.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')    // Remove styles
+			.replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')        // Remove navigation
+			.replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')  // Remove headers
+			.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')  // Remove footers
+			.replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '')    // Remove sidebars
+			.replace(/<[^>]*>/g, ' ')                          // Remove HTML tags
+			.replace(/\s+/g, ' ')                              // Normalize whitespace
+			.trim()                                            // Trim
+			.substring(0, 20000);                              // Limit content size
 
-		logToFile(`🔍 DEBUGGING: Original content length: ${content.length} characters`);
-		logToFile(`🔍 DEBUGGING: Content preview (first 500 chars): ${content.substring(0, 500)}`);
-		
-		// Clean up HTML content for analysis - preserve more structure for transcript detection
-		// Step 1: Remove scripts
-		let step1 = content.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-		logToFile(`🔍 STEP 1 - After removing scripts: ${step1.length} characters (removed ${content.length - step1.length})`);
-		
-		// Step 2: Remove styles
-		let step2 = step1.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-		logToFile(`🔍 STEP 2 - After removing styles: ${step2.length} characters (removed ${step1.length - step2.length})`);
-		
-		// Step 3: Remove navigation
-		let step3 = step2.replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '');
-		logToFile(`🔍 STEP 3 - After removing nav: ${step3.length} characters (removed ${step2.length - step3.length})`);
-		
-		// Step 4: Remove headers
-		let step4 = step3.replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '');
-		logToFile(`🔍 STEP 4 - After removing headers: ${step4.length} characters (removed ${step3.length - step4.length})`);
-		
-		// Step 5: Remove footers
-		let step5 = step4.replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '');
-		logToFile(`🔍 STEP 5 - After removing footers: ${step5.length} characters (removed ${step4.length - step5.length})`);
-		
-		// Step 6: Remove sidebars
-		let step6 = step5.replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '');
-		logToFile(`🔍 STEP 6 - After removing asides: ${step6.length} characters (removed ${step5.length - step6.length})`);
-		
-		// Step 7: Remove all HTML tags - ADD MORE DETAILED ANALYSIS
-		logToFile(`🔍 STEP 7 ANALYSIS - Before removing tags: ${step6.length} characters`);
-		logToFile(`🔍 STEP 7 ANALYSIS - Content sample before tag removal: ${step6.substring(0, 1000)}`);
-		
-		let step7 = step6.replace(/<[^>]*>/g, ' ');
-		logToFile(`🔍 STEP 7 - After removing HTML tags: ${step7.length} characters (removed ${step6.length - step7.length})`);
-		logToFile(`🔍 STEP 7 ANALYSIS - Content sample after tag removal: ${step7.substring(0, 1000)}`);
-		
-		// Step 8: Normalize whitespace
-		let step8 = step7.replace(/\s+/g, ' ');
-		logToFile(`🔍 STEP 8 - After normalizing whitespace: ${step8.length} characters (removed ${step7.length - step8.length})`);
-		
-		// Step 9: Trim
-		let step9 = step8.trim();
-		logToFile(`🔍 STEP 9 - After trimming: ${step9.length} characters (removed ${step8.length - step9.length})`);
-		
-		// Step 10: Substring to 20000
-		const cleanContent = step9.substring(0, 20000);
-		logToFile(`🔍 STEP 10 - After substring to 20000: ${cleanContent.length} characters (kept ${cleanContent.length} of ${step9.length})`);
-		
-		logToFile(`🔍 DEBUGGING: Final cleaned content preview (first 500 chars): ${cleanContent.substring(0, 500)}`);
-		logToFile(`📝 Cleaned content length: ${cleanContent.length} characters`);
+		console.log(`📝 Cleaned content length: ${cleanedContent.length} characters`);
 
 		const prompt = `Analyze this webpage content to find a podcast or video transcript. 
 
@@ -781,7 +733,7 @@ If transcript found: Start with "TRANSCRIPT_FOUND" then the complete formatted t
 If no transcript: Respond only with "NO_TRANSCRIPT"
 
 CONTENT TO ANALYZE:
-${cleanContent}`;
+${cleanedContent}`;
 
 		const openaiRequest: OpenAIRequest = {
 			model: model,
@@ -1111,73 +1063,27 @@ function analyzeRawContent(content: string): {isTranscript: boolean, text: strin
  */
 export async function fetchExternalTranscript(url: string, openaiApiKey: string, webscrapingApiKey: string, model: string): Promise<string | null> {
 	try {
-		// Enhanced URL logging with file output
-		const logToFile = (message: string) => {
-			console.log(message);
-			try {
-				const fs = require('fs');
-				fs.appendFileSync('/Users/jonathanhorst/development/youtube-plugin/console-logs.txt', message + '\n');
-			} catch (error) {
-				console.log('Could not write to log file:', error);
-			}
-		};
+		console.log('🌐 Scraping external URL for transcript:', url);
 
-		logToFile('🌐 Scraping external URL for transcript: ' + url);
-		logToFile('🔍 URL DEBUGGING: Original URL: ' + url);
-		logToFile('🔍 URL DEBUGGING: Original URL length: ' + url.length);
-		logToFile('🔍 URL DEBUGGING: URL contains specific page info: ' + (url.includes('/') && !url.endsWith('/') && url.split('/').length > 3));
-
-		// Use WebScraping.AI to fetch content with detailed logging
+		// Use WebScraping.AI to fetch content
 		const encodedUrl = encodeURIComponent(url);
-		logToFile('🔍 URL DEBUGGING: Encoded URL: ' + encodedUrl);
-		logToFile('🔍 URL DEBUGGING: Encoded URL length: ' + encodedUrl.length);
-		
 		const scrapingUrl = `https://api.webscraping.ai/html?url=${encodedUrl}&api_key=${webscrapingApiKey}`;
-		logToFile('🔍 URL DEBUGGING: Full WebScraping.AI API URL: ' + scrapingUrl);
-		logToFile('🔍 URL DEBUGGING: API URL length: ' + scrapingUrl.length);
 		
-		// Check for potential homepage indicators
-		const isLikelyHomepage = url.endsWith('/') || url.split('/').length <= 3 || url.includes('/home') || url.includes('/index');
-		logToFile('🔍 URL DEBUGGING: Likely homepage URL: ' + isLikelyHomepage);
-		
-		logToFile('📡 Fetching content via WebScraping.AI...');
 		const response = await requestUrl({
 			url: scrapingUrl,
 			method: 'GET',
 			headers: {
-				'User-Agent': 'Mozilla/5.0 (compatible; WebScrapingTest/1.0)'
+				'User-Agent': 'Mozilla/5.0 (compatible; MediaSummarizer/1.0)'
 			}
 		});
 
-		// Enhanced response debugging
-		logToFile('🔍 RESPONSE DEBUGGING: Status: ' + response.status);
-		logToFile('🔍 RESPONSE DEBUGGING: Headers: ' + JSON.stringify(response.headers || {}));
-		
 		if (response.status !== 200) {
-			logToFile(`❌ WebScraping.AI failed: ${response.status} ${response.text}`);
+			console.error(`❌ WebScraping.AI failed: ${response.status} ${response.text}`);
 			return null;
 		}
 
 		const scrapedContent = response.text;
-		logToFile(`✅ Successfully scraped ${scrapedContent.length} characters from ${url}`);
-		
-		// Check if content looks like homepage vs specific page
-		const contentPreview = scrapedContent.substring(0, 1000);
-		logToFile('🔍 RESPONSE DEBUGGING: Content preview (first 1000 chars): ' + contentPreview);
-		
-		// Look for homepage indicators in content
-		const homepageIndicators = ['home', 'welcome', 'main page', 'navigation', 'menu', 'about us', 'contact us'];
-		const hasHomepageIndicators = homepageIndicators.some(indicator => 
-			contentPreview.toLowerCase().includes(indicator)
-		);
-		logToFile('🔍 RESPONSE DEBUGGING: Contains homepage indicators: ' + hasHomepageIndicators);
-		
-		// Check for episode/content specific indicators
-		const contentIndicators = ['transcript', 'episode', 'show notes', 'speaker:', 'host:', 'guest:', 'interview'];
-		const hasContentIndicators = contentIndicators.some(indicator => 
-			contentPreview.toLowerCase().includes(indicator)
-		);
-		logToFile('🔍 RESPONSE DEBUGGING: Contains content indicators: ' + hasContentIndicators);
+		console.log(`✅ Successfully scraped ${scrapedContent.length} characters from ${url}`);
 		
 		const analysis = await analyzeContentForTranscript(scrapedContent, openaiApiKey, model);
 		
@@ -1191,7 +1097,6 @@ export async function fetchExternalTranscript(url: string, openaiApiKey: string,
 
 	} catch (error) {
 		console.error('❌ Error fetching external transcript from', url, ':', error);
-		console.error('❌ Error details:', error.message);
 		return null;
 	}
 }
