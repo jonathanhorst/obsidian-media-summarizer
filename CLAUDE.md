@@ -47,9 +47,12 @@ The plugin follows Obsidian's plugin architecture with these key components:
 ## Development Workflow
 
 ### Directory Structure
-- **Development**: `/Users/jonathanhorst/development/youtube-plugin/`
-- **Production (Obsidian)**: `/Users/jonathanhorst/Library/CloudStorage/Dropbox/documents/Research/.obsidian/plugins/media-summarizer/`
+- **Development Source**: `/Users/jonathanhorst/development/youtube-plugin/` (Source code and compilation)
+- **Development Obsidian**: `/Users/jonathanhorst/development/plugin-dev/.obsidian/plugins/media-summarizer/` (Testing environment)
+- **Production Obsidian**: `/Users/jonathanhorst/Library/CloudStorage/Dropbox/documents/Research/.obsidian/plugins/media-summarizer/` (Live environment)
 - **GitHub Repository**: `https://github.com/jonathanhorst/obsidian-media-summarizer.git`
+
+⚠️ **IMPORTANT**: Always deploy to **Development Obsidian** for testing, NOT Production!
 
 ### Complete Development Cycle
 
@@ -62,17 +65,36 @@ npm run build
 ```
 This creates `main.js` in the development directory.
 
-#### 3. Deploy to Obsidian (Local Testing)
-Copy essential files to the Obsidian plugin directory:
+#### 3. Deploy to Obsidian (Development Testing)
+⚠️ **DEPLOY TO DEVELOPMENT DIRECTORY ONLY** - Never deploy directly to production!
+
+Copy essential files to the **DEVELOPMENT** Obsidian plugin directory:
 ```bash
+# 🔧 DEVELOPMENT DEPLOYMENT (for testing)
+DEV_PLUGIN_DIR="/Users/jonathanhorst/development/plugin-dev/.obsidian/plugins/media-summarizer"
+
+# Ensure development plugin directory exists
+mkdir -p "$DEV_PLUGIN_DIR"
+
 # Copy compiled plugin
-cp /Users/jonathanhorst/development/youtube-plugin/main.js /Users/jonathanhorst/Library/CloudStorage/Dropbox/documents/Research/.obsidian/plugins/media-summarizer/main.js
+cp /Users/jonathanhorst/development/youtube-plugin/main.js "$DEV_PLUGIN_DIR/main.js"
 
 # Copy metadata
-cp /Users/jonathanhorst/development/youtube-plugin/manifest.json /Users/jonathanhorst/Library/CloudStorage/Dropbox/documents/Research/.obsidian/plugins/media-summarizer/manifest.json
+cp /Users/jonathanhorst/development/youtube-plugin/manifest.json "$DEV_PLUGIN_DIR/manifest.json"
 
 # Copy styles
-cp /Users/jonathanhorst/development/youtube-plugin/styles.css /Users/jonathanhorst/Library/CloudStorage/Dropbox/documents/Research/.obsidian/plugins/media-summarizer/styles.css
+cp /Users/jonathanhorst/development/youtube-plugin/styles.css "$DEV_PLUGIN_DIR/styles.css"
+
+echo "✅ Plugin deployed to DEVELOPMENT environment!"
+```
+
+❌ **NEVER USE** - Production deployment (only for final releases):
+```bash
+# 🚫 PRODUCTION DEPLOYMENT (avoid during development)
+# PROD_PLUGIN_DIR="/Users/jonathanhorst/Library/CloudStorage/Dropbox/documents/Research/.obsidian/plugins/media-summarizer"
+# cp main.js "$PROD_PLUGIN_DIR/main.js"
+# cp manifest.json "$PROD_PLUGIN_DIR/manifest.json"
+# cp styles.css "$PROD_PLUGIN_DIR/styles.css"
 ```
 
 #### 4. Test in Obsidian
@@ -119,17 +141,87 @@ git push origin main
 - **GitHub**: Source code for development and collaboration
 - **Local Obsidian**: Compiled files for actual plugin usage
 
-#### Quick Deploy Script
-Consider creating a deploy script to automate step 3:
+#### Quick Deploy Scripts
+Create these scripts to automate deployment and prevent errors:
+
+**Development Deploy Script** (`deploy-dev.sh`):
 ```bash
 #!/bin/bash
-# deploy.sh
-PLUGIN_DIR="/Users/jonathanhorst/development/plugin-dev/.obsidian/plugins/media-summarizer"
-cp main.js "$PLUGIN_DIR/main.js"
-cp manifest.json "$PLUGIN_DIR/manifest.json"
-cp styles.css "$PLUGIN_DIR/styles.css"
-echo "Plugin deployed to Obsidian!"
+# deploy-dev.sh - Deploy to development environment
+set -e
+
+DEV_PLUGIN_DIR="/Users/jonathanhorst/development/plugin-dev/.obsidian/plugins/media-summarizer"
+
+echo "🔧 Deploying to DEVELOPMENT environment..."
+echo "Target: $DEV_PLUGIN_DIR"
+
+# Ensure development plugin directory exists
+mkdir -p "$DEV_PLUGIN_DIR"
+
+# Copy files
+cp main.js "$DEV_PLUGIN_DIR/main.js"
+cp manifest.json "$DEV_PLUGIN_DIR/manifest.json"
+cp styles.css "$DEV_PLUGIN_DIR/styles.css"
+
+echo "✅ Plugin deployed to DEVELOPMENT environment!"
+echo "🔄 Restart Obsidian or reload the plugin to test changes"
 ```
+
+**Production Deploy Script** (`deploy-prod.sh`) - Use only for final releases:
+```bash
+#!/bin/bash
+# deploy-prod.sh - Deploy to production environment (use carefully!)
+set -e
+
+PROD_PLUGIN_DIR="/Users/jonathanhorst/Library/CloudStorage/Dropbox/documents/Research/.obsidian/plugins/media-summarizer"
+
+echo "🚨 WARNING: Deploying to PRODUCTION environment!"
+echo "Target: $PROD_PLUGIN_DIR"
+echo "Are you sure you want to deploy to production? (y/N)"
+read -r response
+
+if [[ "$response" =~ ^[Yy]$ ]]; then
+    # Copy files
+    cp main.js "$PROD_PLUGIN_DIR/main.js"
+    cp manifest.json "$PROD_PLUGIN_DIR/manifest.json"
+    cp styles.css "$PROD_PLUGIN_DIR/styles.css"
+    
+    echo "✅ Plugin deployed to PRODUCTION environment!"
+else
+    echo "❌ Production deployment cancelled"
+    exit 1
+fi
+```
+
+**Usage**:
+```bash
+# For development (safe, use this most of the time)
+./deploy-dev.sh
+
+# For production (only when releasing)
+./deploy-prod.sh
+```
+
+### Deployment Best Practices
+
+#### Development vs Production Guidelines
+1. **Always test in development first** - Never deploy untested code to production
+2. **Use development environment for all coding work** - This prevents breaking your live workflow
+3. **Only deploy to production for stable releases** - When features are fully tested and ready
+4. **Backup production before deploying** - Copy current production files before overwriting
+
+#### Common Deployment Mistakes to Avoid
+❌ **Don't do this**:
+- Deploying directly to production during development
+- Forgetting to build before deploying (`npm run build`)
+- Copying source files instead of compiled `main.js`
+- Overwriting production without testing in development first
+
+✅ **Do this instead**:
+- Always deploy to development first
+- Test thoroughly in development environment
+- Only deploy to production when ready for release
+- Use the provided deploy scripts to prevent errors
 
 ## Reference Materials
 

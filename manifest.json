@@ -1,9 +1,9 @@
 {
 	"id": "media-summarizer",
 	"name": "Media Summarizer",
-	"version": "1.0.0",
+	"version": "0.1.0-beta",
 	"minAppVersion": "0.15.0",
-	"description": "View YouTube videos in a custom pane while taking notes, with AI-powered transcript summarization using OpenAI.",
+	"description": "View YouTube videos in a custom pane while taking notes, with AI-powered transcript summarization using multiple AI providers (OpenAI, OpenRouter, Ollama).",
 	"author": "Jonathan Horst",
 	"authorUrl": "https://github.com/jonathanhorst",
 	"fundingUrl": "https://github.com/jonathanhorst/media-summarizer",

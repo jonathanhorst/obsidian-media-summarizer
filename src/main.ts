@@ -2,6 +2,8 @@ import { Plugin, WorkspaceLeaf, Notice, MarkdownView } from 'obsidian';
 import { MediaSummarizerView, MEDIA_SUMMARIZER_VIEW_TYPE } from './view';
 import { MediaSummarizerSettingTab, MediaSummarizerSettings, DEFAULT_SETTINGS } from './settings';
 import { createTimestampClickHandlerPlugin, convertTimestampToSeconds } from './timestamp-click-handler';
+import { LLMSummarizer } from './llm-summarizer';
+import { ProviderManagerSettings } from './providers/provider-manager';
 
 /**
  * Main plugin class for Media Summarizer
@@ -10,6 +12,7 @@ import { createTimestampClickHandlerPlugin, convertTimestampToSeconds } from './
 export default class MediaSummarizerPlugin extends Plugin {
 	settings: MediaSummarizerSettings;
 	private lastActiveFilePath: string | null = null;
+	private llmSummarizer: LLMSummarizer;
 
 	/**
 	 * Handle timestamp clicks - jump to specific time in video
@@ -48,6 +51,9 @@ export default class MediaSummarizerPlugin extends Plugin {
 
 		// Load settings
 		await this.loadSettings();
+
+		// Initialize LLM summarizer with current settings
+		this.initializeLLMSummarizer();
 
 		// Register the custom view
 		this.registerView(
@@ -529,27 +535,151 @@ Note: Set these shortcuts in Obsidian's Hotkey settings.`;
 	 */
 	async saveSettings(): Promise<void> {
 		await this.saveData(this.settings);
+		
+		// Update LLM summarizer with new settings
+		this.initializeLLMSummarizer();
+	}
+
+	/**
+	 * Initialize or update the LLM summarizer with current settings
+	 */
+	private initializeLLMSummarizer(): void {
+		// Migrate legacy settings to new provider-based settings if needed
+		this.migrateLegacySettings();
+		
+		// Create provider manager settings from plugin settings
+		const providerSettings: ProviderManagerSettings = {
+			currentProvider: this.settings.currentProvider,
+			enableFallback: this.settings.enableFallback,
+			fallbackProvider: this.settings.fallbackProvider,
+			openai: this.settings.providers.openai,
+			openrouter: this.settings.providers.openrouter,
+			ollama: this.settings.providers.ollama
+		};
+
+		if (this.llmSummarizer) {
+			// Update existing summarizer
+			this.llmSummarizer.updateSettings(providerSettings);
+		} else {
+			// Create new summarizer
+			this.llmSummarizer = new LLMSummarizer(providerSettings);
+		}
+	}
+
+	/**
+	 * Migrate legacy settings to new provider-based structure
+	 */
+	private migrateLegacySettings(): void {
+		let needsSave = false;
+
+		// Always ensure providers object exists
+		if (!this.settings.providers) {
+			this.settings.providers = {
+				openai: { apiKey: '', model: 'gpt-4o-mini' },
+				openrouter: { apiKey: '', model: 'anthropic/claude-3.5-sonnet' },
+				ollama: { baseUrl: 'http://localhost:11434', model: 'llama3.1:8b' }
+			};
+			needsSave = true;
+		}
+
+		// Migrate legacy OpenAI settings if they exist and haven't been migrated
+		if (this.settings.openaiApiKey && !this.settings.providers.openai?.apiKey) {
+			this.settings.providers.openai.apiKey = this.settings.openaiApiKey;
+			this.settings.providers.openai.model = this.settings.aiModel || 'gpt-4o-mini';
+			needsSave = true;
+		}
+		
+		// Set default provider selection if not set
+		if (!this.settings.currentProvider) {
+			this.settings.currentProvider = 'openai';
+			needsSave = true;
+		}
+
+		// Set default fallback settings if not set
+		if (this.settings.enableFallback === undefined) {
+			this.settings.enableFallback = false;
+			needsSave = true;
+		}
+
+		if (!this.settings.fallbackProvider) {
+			this.settings.fallbackProvider = 'openrouter';
+			needsSave = true;
+		}
+
+		// Set default external transcript provider settings if not set
+		if (!this.settings.externalTranscriptProvider) {
+			this.settings.externalTranscriptProvider = 'openai';
+			needsSave = true;
+		}
+
+		if (!this.settings.externalTranscriptProviderModel) {
+			// Migrate from legacy setting if available
+			this.settings.externalTranscriptProviderModel = this.settings.externalTranscriptModel || 'gpt-4o-mini';
+			needsSave = true;
+		}
+
+		// Save migrated settings if any changes were made
+		if (needsSave) {
+			console.log('Media Summarizer: Migrating settings to new provider structure');
+			this.saveSettings();
+		}
+	}
+
+	/**
+	 * Get the LLM summarizer instance
+	 */
+	getLLMSummarizer(): LLMSummarizer {
+		if (!this.llmSummarizer) {
+			this.initializeLLMSummarizer();
+		}
+		return this.llmSummarizer;
 	}
 
 	/**
 	 * Check if the plugin is properly configured
 	 */
 	isConfigured(): boolean {
-		return !!(this.settings.openaiApiKey && this.settings.openaiApiKey.trim());
+		// Check if any provider is configured
+		return !!(
+			(this.settings.providers?.openai?.apiKey && this.settings.providers.openai.apiKey.trim()) ||
+			(this.settings.providers?.openrouter?.apiKey && this.settings.providers.openrouter.apiKey.trim()) ||
+			(this.settings.currentProvider === 'ollama') || // Ollama doesn't require API key
+			(this.settings.openaiApiKey && this.settings.openaiApiKey.trim()) // Legacy support
+		);
 	}
 
 	/**
 	 * Get a user-friendly configuration status message
 	 */
 	getConfigurationStatus(): string {
-		if (!this.settings.openaiApiKey || !this.settings.openaiApiKey.trim()) {
-			return 'OpenAI API key not configured. Please set it in plugin settings to enable summarization.';
+		const currentProvider = this.settings.currentProvider;
+		
+		if (currentProvider === 'openai') {
+			const apiKey = this.settings.providers?.openai?.apiKey || this.settings.openaiApiKey;
+			if (!apiKey || !apiKey.trim()) {
+				return 'OpenAI API key not configured. Please set it in plugin settings.';
+			}
+			if (!apiKey.startsWith('sk-')) {
+				return 'Invalid OpenAI API key format. Please check your API key.';
+			}
+			return 'OpenAI provider configured successfully.';
 		}
-
-		if (!this.settings.openaiApiKey.startsWith('sk-')) {
-			return 'Invalid OpenAI API key format. Please check your API key in plugin settings.';
+		
+		if (currentProvider === 'openrouter') {
+			const apiKey = this.settings.providers?.openrouter?.apiKey;
+			if (!apiKey || !apiKey.trim()) {
+				return 'OpenRouter API key not configured. Please set it in plugin settings.';
+			}
+			if (!apiKey.startsWith('sk-or-')) {
+				return 'Invalid OpenRouter API key format. Please check your API key.';
+			}
+			return 'OpenRouter provider configured successfully.';
 		}
-
-		return 'Plugin is properly configured.';
+		
+		if (currentProvider === 'ollama') {
+			return 'Ollama provider selected. Make sure Ollama is running locally.';
+		}
+		
+		return 'No AI provider configured. Please select and configure a provider in plugin settings.';
 	}
 }

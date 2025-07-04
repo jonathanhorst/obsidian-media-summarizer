@@ -3,7 +3,7 @@ import { createRoot, Root } from 'react-dom/client';
 import * as React from 'react';
 import YouTube from 'react-youtube';
 import MediaSummarizerPlugin from './main';
-import { getTranscript, getTranscriptLines, getYouTubeMetadataAPI, enhanceTranscript, summarize, formatRawTranscriptWithTimestamps, checkForExternalTranscript, scrapeSelectedUrl } from './summarizer';
+import { getTranscript, getTranscriptLines, getYouTubeMetadataAPI, formatRawTranscriptWithTimestamps, checkForExternalTranscript, scrapeSelectedUrl, checkForExternalTranscriptWithProvider, scrapeSelectedUrlWithProvider } from './summarizer';
 import { YoutubeAPITranscript } from './youtube-api-transcript';
 
 /**
@@ -102,15 +102,35 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 
 	// Search for external transcript URLs when button is clicked
 	const searchForExternalUrls = async () => {
-		if (!plugin.settings.youtubeApiKey || !plugin.settings.openaiApiKey || !plugin.settings.webscrapingApiKey) {
-			new Notice('Please configure YouTube Data API, OpenAI, and WebScraping.AI API keys in settings');
+		if (!plugin.settings.youtubeApiKey || !plugin.settings.webscrapingApiKey) {
+			new Notice('Please configure YouTube Data API and WebScraping.AI API keys in settings');
+			return;
+		}
+
+		// Check if external transcript provider is configured
+		const externalProvider = plugin.settings.externalTranscriptProvider || 'openai';
+		const externalModel = plugin.settings.externalTranscriptProviderModel || 'gpt-4o-mini';
+
+		// Validate provider configuration
+		const isProviderConfigured = plugin.getLLMSummarizer().isProviderConfigured(externalProvider);
+		if (!isProviderConfigured) {
+			new Notice(`Please configure ${externalProvider} API key in settings for external transcript processing`);
 			return;
 		}
 
 		const loadingNotice = new Notice('Searching for external transcript URLs...', 0);
 		
 		try {
-			const result = await checkForExternalTranscript(mediaLink, plugin.settings.youtubeApiKey, plugin.settings.openaiApiKey, plugin.settings.webscrapingApiKey, plugin.settings.externalTranscriptModel);
+			// Use the new provider-aware function
+			const providerManager = plugin.getLLMSummarizer().getProviderManager();
+			const result = await checkForExternalTranscriptWithProvider(
+				mediaLink, 
+				plugin.settings.youtubeApiKey, 
+				plugin.settings.webscrapingApiKey,
+				providerManager,
+				externalProvider,
+				externalModel
+			);
 			
 			loadingNotice.hide();
 			
@@ -224,7 +244,17 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 				return;
 			}
 
-			const summary = await summarize(transcript, plugin.settings.openaiApiKey, plugin.settings.aiModel);
+			// Get metadata for better AI processing
+			let metadata: { title?: string; channel?: string; description?: string } | undefined;
+			try {
+				if (plugin.settings.youtubeApiKey) {
+					metadata = await getYouTubeMetadataAPI(mediaLink, plugin.settings.youtubeApiKey);
+				}
+			} catch (error) {
+				// Metadata is optional for summary
+			}
+
+			const summary = await plugin.getLLMSummarizer().summarizeTranscript(transcript, metadata);
 			
 			loadingNotice.hide();
 
@@ -322,7 +352,8 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 					loadingNotice = new Notice('Enhancing transcript with AI...', 0);
 
 					// Enhance transcript with AI using timestamp data
-					const enhancedTranscript = await enhanceTranscript(transcriptLines, metadata, plugin.settings.openaiApiKey, plugin.settings.aiModel);
+					const plainTranscript = transcriptLines.map(line => line.text).join(' ');
+					const enhancedTranscript = await plugin.getLLMSummarizer().enhanceTranscript(plainTranscript, metadata);
 					
 					if (enhancedTranscript.startsWith('Error:')) {
 						loadingNotice.hide();
@@ -526,19 +557,33 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 		setShowUrlModal(false);
 		
 		// Validate API keys
-		if (!plugin.settings.webscrapingApiKey || !plugin.settings.openaiApiKey) {
-			new Notice('Please configure WebScraping.AI and OpenAI API keys in settings');
+		if (!plugin.settings.webscrapingApiKey) {
+			new Notice('Please configure WebScraping.AI API key in settings');
+			return;
+		}
+
+		// Get external transcript provider settings
+		const externalProvider = plugin.settings.externalTranscriptProvider || 'openai';
+		const externalModel = plugin.settings.externalTranscriptProviderModel || 'gpt-4o-mini';
+
+		// Validate provider configuration
+		const isProviderConfigured = plugin.getLLMSummarizer().isProviderConfigured(externalProvider);
+		if (!isProviderConfigured) {
+			new Notice(`Please configure ${externalProvider} API key in settings for external transcript processing`);
 			return;
 		}
 
 		const loadingNotice = new Notice('Scraping external transcript...', 0);
 
 		try {
-			const result = await scrapeSelectedUrl(
+			// Use the new provider-aware function
+			const providerManager = plugin.getLLMSummarizer().getProviderManager();
+			const result = await scrapeSelectedUrlWithProvider(
 				selectedUrl,
-				plugin.settings.openaiApiKey,
 				plugin.settings.webscrapingApiKey,
-				plugin.settings.externalTranscriptModel
+				providerManager,
+				externalProvider,
+				externalModel
 			);
 
 			loadingNotice.hide();
@@ -602,12 +647,14 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 					>
 						📝 Summarize
 					</button>
-					<button 
-						className="media-summarizer-btn media-summarizer-transcript-btn"
-						onClick={insertEnhancedTranscript}
-					>
-						📄 Enhanced Transcript
-					</button>
+					{plugin.settings.enhancedTranscriptFormatting && (
+						<button 
+							className="media-summarizer-btn media-summarizer-transcript-btn"
+							onClick={insertEnhancedTranscript}
+						>
+							📄 Enhanced Transcript
+						</button>
+					)}
 					<button 
 						className="media-summarizer-btn media-summarizer-raw-transcript-btn"
 						onClick={insertRawTranscript}

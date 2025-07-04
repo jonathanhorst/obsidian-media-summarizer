@@ -1,7 +1,7 @@
 {
 	"name": "media-summarizer",
-	"version": "1.0.0",
-	"description": "View YouTube videos in a custom pane while taking notes, with AI-powered transcript summarization using OpenAI.",
+	"version": "0.1.0-beta",
+	"description": "View YouTube videos in a custom pane while taking notes, with AI-powered transcript summarization using multiple AI providers (OpenAI, OpenRouter, Ollama).",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
@@ -15,7 +15,10 @@
 		"summarizer",
 		"ai",
 		"openai",
-		"transcript"
+		"openrouter",
+		"ollama",
+		"transcript",
+		"multi-provider"
 	],
 	"author": "Jonathan Horst",
 	"license": "MIT",

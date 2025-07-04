@@ -1149,6 +1149,148 @@ export function formatRawTranscriptWithTimestamps(lines: TranscriptLine[]): stri
 }
 
 /**
+ * Check for external transcript using the new multi-provider system
+ */
+export async function checkForExternalTranscriptWithProvider(
+	url: string, 
+	youtubeApiKey: string, 
+	webscrapingApiKey: string,
+	providerManager: any, // ProviderManager instance
+	provider: string,
+	model: string
+): Promise<{text: string, sourceUrl: string, urls: string[]} | null> {
+	try {
+		// Get video metadata using YouTube Data API v3
+		const metadata = await getYouTubeMetadataAPI(url, youtubeApiKey);
+		
+		if (!metadata.description) {
+			return null;
+		}
+
+		// Find potential transcript URLs (full URLs from API v3)
+		const potentialUrls = findPotentialTranscriptUrls(metadata.description);
+		
+		if (potentialUrls.length === 0) {
+			return null;
+		}
+
+		// Return URLs for user selection - don't auto-scrape
+		return {
+			text: '', // Will be filled when user selects URL
+			sourceUrl: '',
+			urls: potentialUrls
+		};
+
+	} catch (error) {
+		console.error('Error checking for external transcript:', error);
+		return null;
+	}
+}
+
+/**
+ * Scrape a specific URL using the new multi-provider system
+ */
+export async function scrapeSelectedUrlWithProvider(
+	url: string, 
+	webscrapingApiKey: string,
+	providerManager: any, // ProviderManager instance  
+	provider: string,
+	model: string
+): Promise<{text: string, sourceUrl: string} | null> {
+	try {
+		const transcript = await fetchExternalTranscriptWithProvider(url, webscrapingApiKey, providerManager, provider, model);
+		
+		if (transcript) {
+			return {
+				text: transcript,
+				sourceUrl: url
+			};
+		}
+
+		return null;
+
+	} catch (error) {
+		console.error('Error scraping selected URL:', error);
+		return null;
+	}
+}
+
+/**
+ * Fetch external transcript content using multi-provider system
+ */
+async function fetchExternalTranscriptWithProvider(
+	url: string,
+	webscrapingApiKey: string,
+	providerManager: any, // ProviderManager instance
+	provider: string,
+	model: string
+): Promise<string | null> {
+	try {
+		// First, scrape the content using WebScraping.AI
+		const scrapingResponse = await requestUrl({
+			url: 'https://api.webscraping.ai/html',
+			method: 'GET',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: new URLSearchParams({
+				'api_key': webscrapingApiKey,
+				'url': url,
+				'js': 'false',
+				'proxy': 'datacenter'
+			}).toString()
+		});
+
+		if (scrapingResponse.status !== 200) {
+			throw new Error(`WebScraping.AI failed: ${scrapingResponse.status}`);
+		}
+
+		const htmlContent = scrapingResponse.text;
+		
+		if (!htmlContent || htmlContent.trim().length === 0) {
+			throw new Error('No content retrieved from webpage');
+		}
+
+		// Now use the selected provider to extract transcript from HTML
+		const extractionPrompt = `Extract the video transcript from this webpage content. The page may contain a transcript, subtitles, or captions.
+
+Look for:
+- Video transcripts or captions
+- Subtitle content  
+- Speech-to-text content
+- Time-stamped dialogue
+
+Return ONLY the clean transcript text. If no transcript is found, return "NO_TRANSCRIPT_FOUND".
+
+Webpage content:
+${htmlContent.substring(0, 8000)}...`; // Limit content size
+
+		// Use the provider manager to process the content
+		const response = await providerManager.chatCompletion({
+			model: model,
+			messages: [
+				{ role: 'system', content: 'You are an expert at extracting video transcripts from webpage content. Extract only the transcript text, remove HTML tags, navigation, ads, and other non-transcript content.' },
+				{ role: 'user', content: extractionPrompt }
+			],
+			temperature: 0.1,
+			max_tokens: 4000
+		});
+
+		const extractedContent = response.content.trim();
+		
+		if (extractedContent === 'NO_TRANSCRIPT_FOUND' || extractedContent.length < 50) {
+			return null;
+		}
+
+		return extractedContent;
+
+	} catch (error) {
+		console.error('Failed to fetch external transcript:', error);
+		return null;
+	}
+}
+
+/**
  * Format transcript lines with timestamps for AI processing
  * @param lines - Array of transcript lines with timing data
  * @returns Formatted string with timestamps and duration info
