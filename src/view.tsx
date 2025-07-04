@@ -813,14 +813,46 @@ export class MediaSummarizerView extends ItemView {
 		}
 	}
 
-	private async loadVideo(url: string): Promise<void> {
+	private async loadVideo(url: string, savedState?: {
+		currentTime: number;
+		playbackRate: number;
+		playerState: number;
+	} | null): Promise<void> {
 		if (!this.root) return;
 
 		this.root.render(
 			<MediaPlayer 
 				mediaLink={url} 
 				plugin={this.plugin}
-				onReady={() => {}}
+				onReady={() => {
+					// Restore playback state after video is ready
+					if (savedState && this.ytRef.current) {
+						setTimeout(() => {
+							try {
+								const player = this.ytRef.current?.getInternalPlayer();
+								if (player && typeof player.seekTo === 'function') {
+									// Restore playback position
+									player.seekTo(savedState.currentTime, true);
+									
+									// Restore playback rate
+									if (typeof player.setPlaybackRate === 'function') {
+										player.setPlaybackRate(savedState.playbackRate);
+									}
+									
+									// Restore play/pause state
+									// PlayerState: 1 = playing, 2 = paused
+									if (savedState.playerState === 1 && typeof player.playVideo === 'function') {
+										player.playVideo();
+									} else if (savedState.playerState === 2 && typeof player.pauseVideo === 'function') {
+										player.pauseVideo();
+									}
+								}
+							} catch (error) {
+								console.log('Could not restore playback state:', error);
+							}
+						}, 500); // Small delay to ensure video is fully loaded
+					}
+				}}
 				ytRef={this.ytRef}
 			/>
 		);
@@ -847,6 +879,40 @@ media_url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
 
 	async refresh(): Promise<void> {
 		await this.smartLoadVideoFromActiveNote();
+	}
+
+	/**
+	 * Refresh the view to reflect settings changes while preserving video playback state
+	 */
+	async refreshView(): Promise<void> {
+		if (!this.root || !this.currentVideoUrl) {
+			return;
+		}
+
+		// Save current playback state if video is loaded
+		let savedState: {
+			currentTime: number;
+			playbackRate: number;
+			playerState: number;
+		} | null = null;
+
+		try {
+			if (this.ytRef.current) {
+				const player = this.ytRef.current.getInternalPlayer();
+				if (player && typeof player.getCurrentTime === 'function') {
+					savedState = {
+						currentTime: player.getCurrentTime(),
+						playbackRate: player.getPlaybackRate(),
+						playerState: player.getPlayerState()
+					};
+				}
+			}
+		} catch (error) {
+			console.log('Could not save playback state:', error);
+		}
+
+		// Re-render the React component with updated settings
+		await this.loadVideo(this.currentVideoUrl, savedState);
 	}
 
 	private async smartLoadVideoFromActiveNote(): Promise<void> {
@@ -894,4 +960,5 @@ media_url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
 			}
 		}
 	}
+
 }

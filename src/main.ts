@@ -538,6 +538,24 @@ Note: Set these shortcuts in Obsidian's Hotkey settings.`;
 		
 		// Update LLM summarizer with new settings
 		this.initializeLLMSummarizer();
+		
+		// Refresh all Media Summarizer views to reflect settings changes
+		this.refreshAllMediaSummarizerViews();
+	}
+
+	/**
+	 * Refresh all Media Summarizer views to reflect settings changes
+	 */
+	private refreshAllMediaSummarizerViews(): void {
+		const leaves = this.app.workspace.getLeavesOfType(MEDIA_SUMMARIZER_VIEW_TYPE);
+		leaves.forEach(leaf => {
+			const view = leaf.view as MediaSummarizerView;
+			if (view && typeof view.refreshView === 'function') {
+				view.refreshView().catch(error => {
+					console.error('Error refreshing Media Summarizer view:', error);
+				});
+			}
+		});
 	}
 
 	/**
