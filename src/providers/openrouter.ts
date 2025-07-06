@@ -12,28 +12,7 @@ export class OpenRouterProvider extends BaseLLMProvider {
       baseUrl,
       apiKey,
       defaultModel: 'anthropic/claude-3.5-sonnet',
-      availableModels: [
-        // Anthropic Claude models
-        'anthropic/claude-3.5-sonnet',
-        'anthropic/claude-3-haiku',
-        'anthropic/claude-3-opus',
-        
-        // OpenAI models (often cheaper through OpenRouter)
-        'openai/gpt-4o-mini',
-        'openai/gpt-4o',
-        'openai/gpt-4-turbo',
-        
-        // Open source models
-        'meta-llama/llama-3.1-8b-instruct',
-        'meta-llama/llama-3.1-70b-instruct',
-        'mistralai/mistral-7b-instruct',
-        'mistralai/mixtral-8x7b-instruct',
-        
-        // Specialized models
-        'cohere/command-r-plus',
-        'google/gemini-pro',
-        'perplexity/llama-3.1-sonar-large-128k-online'
-      ],
+      availableModels: [],
       requiresAuth: true,
       isLocal: false,
       maxTokens: 8000,
@@ -156,13 +135,13 @@ export class OpenRouterProvider extends BaseLLMProvider {
           .map((model: any) => model.id)
           .sort();
 
-        return chatModels.length > 0 ? chatModels : this.config.availableModels;
+        return chatModels.length > 0 ? chatModels : [];
       }
 
-      return this.config.availableModels;
+      return [];
     } catch (error) {
-      console.warn('Failed to fetch OpenRouter models, using defaults:', error);
-      return this.config.availableModels;
+      console.warn('Failed to fetch OpenRouter models:', error);
+      return [];
     }
   }
 

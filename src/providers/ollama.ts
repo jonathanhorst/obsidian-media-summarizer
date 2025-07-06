@@ -12,18 +12,7 @@ export class OllamaProvider extends BaseLLMProvider {
       baseUrl,
       apiKey: 'ollama', // Required by OpenAI client but unused
       defaultModel: '',
-      availableModels: [
-        'llama3.1:8b',
-        'llama3.1:70b',
-        'mistral:7b',
-        'mistral:latest',
-        'codellama:7b',
-        'codellama:13b',
-        'phi3:3.8b',
-        'phi3:14b',
-        'gemma:7b',
-        'qwen2:7b'
-      ],
+      availableModels: [],
       requiresAuth: false,
       isLocal: true,
       maxTokens: 8000,
@@ -121,8 +110,8 @@ export class OllamaProvider extends BaseLLMProvider {
       // Check if Ollama is running first
       const isRunning = await this.isOllamaRunning();
       if (!isRunning) {
-        console.warn('Ollama is not running, returning default models');
-        return this.config.availableModels;
+        console.warn('Ollama is not running');
+        return [];
       }
 
       const response = await requestUrl({
@@ -139,13 +128,13 @@ export class OllamaProvider extends BaseLLMProvider {
       
       if (data.models && Array.isArray(data.models)) {
         const modelNames = data.models.map((model: any) => model.name).sort();
-        return modelNames.length > 0 ? modelNames : this.config.availableModels;
+        return modelNames.length > 0 ? modelNames : [];
       }
 
-      return this.config.availableModels;
+      return [];
     } catch (error) {
-      console.warn('Failed to fetch Ollama models, using defaults:', error);
-      return this.config.availableModels;
+      console.warn('Failed to fetch Ollama models:', error);
+      return [];
     }
   }
 

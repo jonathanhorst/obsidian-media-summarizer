@@ -29,6 +29,11 @@ export interface MediaSummarizerSettings {
 		};
 	};
 	
+	// Feature toggle settings (progressive disclosure)
+	enableSummarization: boolean;
+	enableEnhancedTranscript: boolean;
+	enableExternalTranscriptDetection: boolean;
+	
 	// Existing settings
 	enhancedTranscriptFormatting: boolean;
 	checkExternalTranscripts: boolean;
@@ -73,6 +78,11 @@ export const DEFAULT_SETTINGS: MediaSummarizerSettings = {
 		}
 	},
 	
+	// Feature toggle settings (progressive disclosure) - Default to false for manual user enablement
+	enableSummarization: false,
+	enableEnhancedTranscript: false,
+	enableExternalTranscriptDetection: false,
+	
 	// Existing settings
 	enhancedTranscriptFormatting: true,
 	checkExternalTranscripts: false,
@@ -115,7 +125,7 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 
 		// Documentation link
 		containerEl.createEl('a', {
-			text: 'View usage guide',
+			text: 'View docs',
 			href: 'https://github.com/jonathanhorst/obsidian-media-summarizer/blob/main/USAGE.md',
 			attr: { 
 				target: '_blank',
@@ -123,12 +133,53 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 			}
 		});
 
-		// FEATURE-BASED ORGANIZATION (Option 2)
-		this.addVideoPlaybackSection(containerEl);
-		this.addAISummarizationSection(containerEl);
-		this.addBasicTranscriptsSection(containerEl);
+		// Keyboard shortcuts note
+		const keyboardShortcutsP = containerEl.createEl('p', {
+			text: 'Configure ',
+			attr: { style: 'margin-bottom: 20px; color: var(--text-muted);' }
+		});
+		
+		const hotkeysLink = keyboardShortcutsP.createEl('a', {
+			text: 'hotkeys',
+			href: '#',
+			attr: { style: 'cursor: pointer; color: var(--text-accent);' }
+		});
+		
+		hotkeysLink.addEventListener('click', (e) => {
+			e.preventDefault();
+			// Open settings using the app settings approach
+			// @ts-ignore - Accessing internal Obsidian API
+			if (this.app.setting) {
+				// @ts-ignore
+				this.app.setting.open();
+				// Try to navigate to hotkeys tab after a short delay
+				setTimeout(() => {
+					// @ts-ignore
+					if (this.app.setting.openTabById) {
+						// @ts-ignore
+						this.app.setting.openTabById('hotkeys');
+					}
+				}, 100);
+			}
+		});
+		
+		keyboardShortcutsP.appendText(' to improve your productivity. Learn more in the ');
+		
+		keyboardShortcutsP.createEl('a', {
+			text: 'documentation',
+			href: 'https://github.com/jonathanhorst/obsidian-media-summarizer/blob/main/USAGE.md',
+			attr: { target: '_blank' }
+		});
+
+		// PROGRESSIVE DISCLOSURE ORGANIZATION
+		this.addPlaybackSection(containerEl);
+		this.addPowerFeaturesSection(containerEl);
+		this.addPrimaryLLMConfigSection(containerEl);
+		this.addEnhancedTranscriptLLMConfigSection(containerEl);
 		this.addExperimentalFeaturesSection(containerEl);
-		this.addAdvancedOptionsSection(containerEl);
+
+		// Add anchor link navigation
+		this.setupAnchorLinks(containerEl);
 	}
 
 
@@ -152,7 +203,6 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 	 * Add OpenAI provider settings
 	 */
 	private addOpenAISettings(containerEl: HTMLElement): void {
-		containerEl.createEl('h4', { text: 'OpenAI Configuration' });
 
 		new Setting(containerEl)
 			.setName('OpenAI API Key')
@@ -165,12 +215,19 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 					// Maintain backward compatibility
 					this.plugin.settings.openaiApiKey = value;
 					await this.plugin.saveSettings();
+					
+					// Refresh display to show/hide model dropdown
+					const scrollTop = this.containerEl.scrollTop;
+					this.display();
+					this.containerEl.scrollTop = scrollTop;
 				}));
 
-		// OpenAI Model selection with refresh button
-		const openaiModelSetting = new Setting(containerEl)
-			.setName('OpenAI Model')
-			.setDesc('Select an OpenAI model for transcript processing');
+		// Show model selection only if API key is present
+		if (this.plugin.settings.providers.openai.apiKey) {
+			// OpenAI Model selection with refresh button
+			const openaiModelSetting = new Setting(containerEl)
+				.setName('OpenAI Model')
+				.setDesc('Select an OpenAI model for transcript processing');
 
 		// Create container for dropdown and refresh button
 		const openaiModelContainer = openaiModelSetting.controlEl.createEl('div', { 
@@ -258,6 +315,7 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 				openaiRefreshBtn.disabled = false;
 			}
 		});
+		}
 
 	}
 
@@ -265,7 +323,6 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 	 * Add OpenRouter provider settings
 	 */
 	private addOpenRouterSettings(containerEl: HTMLElement): void {
-		containerEl.createEl('h4', { text: 'OpenRouter Configuration' });
 
 		new Setting(containerEl)
 			.setName('OpenRouter API Key')
@@ -276,12 +333,19 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					this.plugin.settings.providers.openrouter.apiKey = value;
 					await this.plugin.saveSettings();
+					
+					// Refresh display to show/hide model dropdown
+					const scrollTop = this.containerEl.scrollTop;
+					this.display();
+					this.containerEl.scrollTop = scrollTop;
 				}));
 
-		// OpenRouter Model selection with refresh button
-		const openrouterModelSetting = new Setting(containerEl)
-			.setName('OpenRouter Model')
-			.setDesc('Select a model for transcript processing');
+		// Show model selection only if API key is present
+		if (this.plugin.settings.providers.openrouter.apiKey) {
+			// OpenRouter Model selection with refresh button
+			const openrouterModelSetting = new Setting(containerEl)
+				.setName('OpenRouter Model')
+				.setDesc('Select a model for transcript processing');
 
 		// Create container for dropdown and refresh button
 		const openrouterModelContainer = openrouterModelSetting.controlEl.createEl('div', { 
@@ -365,6 +429,7 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 				openrouterRefreshBtn.disabled = false;
 			}
 		});
+		}
 
 	}
 
@@ -372,7 +437,6 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 	 * Add Ollama provider settings
 	 */
 	private addOllamaSettings(containerEl: HTMLElement): void {
-		containerEl.createEl('h4', { text: 'Ollama Configuration' });
 
 		new Setting(containerEl)
 			.setName('Ollama Base URL')
@@ -383,14 +447,19 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					this.plugin.settings.providers.ollama.baseUrl = value;
 					await this.plugin.saveSettings();
-					// Refresh the model dropdown when URL changes
-					setTimeout(() => this.refreshOllamaModels(), 500);
+					
+					// Refresh display to show/hide model dropdown
+					const scrollTop = this.containerEl.scrollTop;
+					this.display();
+					this.containerEl.scrollTop = scrollTop;
 				}));
 
-		// Model selection with refresh button
-		const modelSetting = new Setting(containerEl)
-			.setName('Ollama Model')
-			.setDesc('Select a model from your installed Ollama models');
+		// Show model selection only if base URL is present
+		if (this.plugin.settings.providers.ollama.baseUrl) {
+			// Model selection with refresh button
+			const modelSetting = new Setting(containerEl)
+				.setName('Ollama Model')
+				.setDesc('Select a model from your installed Ollama models');
 
 		// Create container for dropdown and refresh button
 		const modelContainer = modelSetting.controlEl.createEl('div', { 
@@ -436,6 +505,7 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 				refreshBtn.disabled = false;
 			}
 		});
+		}
 
 
 	}
@@ -995,25 +1065,31 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 	}
 
 	/**
-	 * Add Video Playback section (no setup required)
+	 * Add Playbook section (Wireframe: Core Features)
 	 */
-	private addVideoPlaybackSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h3', { text: 'Video Playback' });
-		
-
-		// Video Controls subsection
-		containerEl.createEl('h4', { text: 'Video Controls' });
+	private addPlaybackSection(containerEl: HTMLElement): void {
+		containerEl.createEl('h2', { text: 'Playback' });
+		containerEl.createEl('p', {
+			text: 'Essential features that work immediately without additional setup.',
+			cls: 'setting-item-description'
+		});
 
 		// Seek seconds setting
 		new Setting(containerEl)
 			.setName('Seek seconds')
-			.setDesc('Skip seconds for forward/backward')
-			.addSlider(slider => slider
-				.setLimits(1, 60, 1)
-				.setDynamicTooltip()
-				.setValue(this.plugin.settings.seekSeconds)
+			.setDesc('How many seconds to skip forward/backward')
+			.addDropdown(dropdown => dropdown
+				.addOptions({
+					'10': '10 seconds',
+					'20': '20 seconds',
+					'30': '30 seconds',
+					'40': '40 seconds',
+					'50': '50 seconds',
+					'60': '60 seconds'
+				})
+				.setValue(this.plugin.settings.seekSeconds.toString())
 				.onChange(async (value) => {
-					this.plugin.settings.seekSeconds = value;
+					this.plugin.settings.seekSeconds = parseInt(value);
 					await this.plugin.saveSettings();
 				}));
 
@@ -1021,52 +1097,82 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName('Default playback speed')
 			.addDropdown(dropdown => dropdown
-				.addOptions({
-					'0.5': '0.5x',
-					'0.75': '0.75x',
-					'1': '1x (Normal)',
-					'1.25': '1.25x',
-					'1.5': '1.5x',
-					'2': '2x'
-				})
+				.addOption('0.5', '0.5x')
+				.addOption('0.75', '0.75x')
+				.addOption('1', '1x')
+				.addOption('1.25', '1.25x')
+				.addOption('1.5', '1.5x')
+				.addOption('2', '2x')
 				.setValue(this.plugin.settings.defaultPlaybackSpeed.toString())
 				.onChange(async (value) => {
 					this.plugin.settings.defaultPlaybackSpeed = parseFloat(value);
 					await this.plugin.saveSettings();
 				}));
 
-		// Timestamp Behavior subsection
-		containerEl.createEl('h4', { text: 'Timestamp Behavior' });
-
-		// Timestamp offset setting
+		// Timestamp offset toggle
 		new Setting(containerEl)
 			.setName('Timestamp offset')
-			.setDesc('Seconds to subtract when inserting timestamps')
-			.addSlider(slider => slider
-				.setLimits(0, 10, 1)
-				.setDynamicTooltip()
-				.setValue(this.plugin.settings.timestampOffsetSeconds)
+			.setDesc('Enable to offset timestamps when inserting them into your notes')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.timestampOffsetSeconds > 0)
 				.onChange(async (value) => {
-					this.plugin.settings.timestampOffsetSeconds = value;
+					this.plugin.settings.timestampOffsetSeconds = value ? 2 : 0;
 					await this.plugin.saveSettings();
+					
+					// Preserve scroll position during refresh
+					const scrollTop = this.containerEl.scrollTop;
+					this.display();
+					this.containerEl.scrollTop = scrollTop;
 				}));
 
-		// Playback offset setting
+		// Timestamp offset amount (conditional)
+		if (this.plugin.settings.timestampOffsetSeconds > 0) {
+			new Setting(containerEl)
+				.setName('Timestamp offset amount')
+				.addSlider(slider => slider
+					.setLimits(0, 10, 1)
+					.setDynamicTooltip()
+					.setValue(this.plugin.settings.timestampOffsetSeconds)
+					.onChange(async (value) => {
+						this.plugin.settings.timestampOffsetSeconds = value;
+						await this.plugin.saveSettings();
+					}));
+		}
+
+		// Playback offset toggle
 		new Setting(containerEl)
 			.setName('Playback offset')
-			.setDesc('Seconds to rewind after inserting timestamps')
-			.addSlider(slider => slider
-				.setLimits(0, 10, 1)
-				.setDynamicTooltip()
-				.setValue(this.plugin.settings.playbackOffsetSeconds)
+			.setDesc('Enable to auto-rewind after inserting timestamps')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.playbackOffsetSeconds > 0)
 				.onChange(async (value) => {
-					this.plugin.settings.playbackOffsetSeconds = value;
+					this.plugin.settings.playbackOffsetSeconds = value ? 2 : 0;
 					await this.plugin.saveSettings();
+					
+					// Preserve scroll position during refresh
+					const scrollTop = this.containerEl.scrollTop;
+					this.display();
+					this.containerEl.scrollTop = scrollTop;
 				}));
 
-		// Pause on timestamp insert setting
+		// Playback offset amount (conditional)
+		if (this.plugin.settings.playbackOffsetSeconds > 0) {
+			new Setting(containerEl)
+				.setName('Playback offset amount')
+				.addSlider(slider => slider
+					.setLimits(0, 10, 1)
+					.setDynamicTooltip()
+					.setValue(this.plugin.settings.playbackOffsetSeconds)
+					.onChange(async (value) => {
+						this.plugin.settings.playbackOffsetSeconds = value;
+						await this.plugin.saveSettings();
+					}));
+		}
+
+		// Pause on insert setting
 		new Setting(containerEl)
-			.setName('Pause on timestamp insert')
+			.setName('Pause on insert')
+			.setDesc('Automatically pause video when inserting timestamps')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.pauseOnTimestampInsert)
 				.onChange(async (value) => {
@@ -1074,22 +1180,427 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
-		// Formatting subsection
-		containerEl.createEl('h4', { text: 'Formatting' });
-
-		// Enhanced transcript formatting setting
-		new Setting(containerEl)
-			.setName('Enhanced transcript formatting')
-			.setDesc('Use AI to improve transcript readability')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.enhancedTranscriptFormatting)
-				.onChange(async (value) => {
-					this.plugin.settings.enhancedTranscriptFormatting = value;
-					await this.plugin.saveSettings();
-				}));
-
 	}
 
+	/**
+	 * Add Power Features section with feature toggles
+	 */
+	private addPowerFeaturesSection(containerEl: HTMLElement): void {
+		containerEl.createEl('h2', { text: 'Power Features', attr: { id: 'power-features' } });
+		containerEl.createEl('p', {
+			text: 'Enhanced capabilities that require additional configuration.',
+			cls: 'setting-item-description'
+		});
+
+		// Summarization toggle
+		new Setting(containerEl)
+			.setName('Summarization')
+			.setDesc('Get instant video summaries - Key points, main ideas, and takeaways.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableSummarization)
+				.onChange(async (value) => {
+					this.plugin.settings.enableSummarization = value;
+					await this.plugin.saveSettings();
+					
+					// Preserve scroll position during refresh
+					const scrollTop = this.containerEl.scrollTop;
+					this.display();
+					this.containerEl.scrollTop = scrollTop;
+				}));
+
+		// Show "Configure LLM" link if enabled but no provider configured
+		if (this.plugin.settings.enableSummarization && !this.hasConfiguredAIProvider()) {
+			containerEl.createEl('div', {
+				cls: 'setting-item-description',
+				text: 'Requires an LLM to be configured. ',
+				attr: { style: 'color: var(--text-warning); margin-top: -12px; margin-bottom: 16px;' }
+			}).createEl('a', {
+				text: 'Configure an LLM',
+				href: '#primary-llm-config',
+				attr: { style: 'color: var(--text-accent);' }
+			});
+		}
+
+		// Enhanced transcript toggle
+		new Setting(containerEl)
+			.setName('Enhanced transcript')
+			.setDesc('Get clean, readable transcripts with proper punctuation, paragraphs, and speaker identification.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.enableEnhancedTranscript)
+				.onChange(async (value) => {
+					this.plugin.settings.enableEnhancedTranscript = value;
+					await this.plugin.saveSettings();
+					
+					// Preserve scroll position during refresh
+					const scrollTop = this.containerEl.scrollTop;
+					this.display();
+					this.containerEl.scrollTop = scrollTop;
+				}));
+
+		// Show "Configure LLM" link if enabled but no provider configured
+		if (this.plugin.settings.enableEnhancedTranscript && !this.hasConfiguredAIProvider()) {
+			containerEl.createEl('div', {
+				cls: 'setting-item-description',
+				text: 'Requires an LLM to be configured. ',
+				attr: { style: 'color: var(--text-warning); margin-top: -12px; margin-bottom: 16px;' }
+			}).createEl('a', {
+				text: 'Configure an LLM',
+				href: '#primary-llm-config',
+				attr: { style: 'color: var(--text-accent);' }
+			});
+		}
+	}
+
+	/**
+	 * Add Primary LLM Config section (conditional)
+	 */
+	private addPrimaryLLMConfigSection(containerEl: HTMLElement): void {
+		// Only show if any AI features are enabled
+		const showLLMConfig = this.plugin.settings.enableSummarization || 
+							  this.plugin.settings.enableEnhancedTranscript;
+
+		if (!showLLMConfig) return;
+
+		containerEl.createEl('h2', { text: 'Primary LLM Config', attr: { id: 'primary-llm-config' } });
+		containerEl.createEl('p', {
+			text: 'Choose your preferred LLM provider and model based on your budget and privacy preferences.',
+			cls: 'setting-item-description'
+		});
+
+		// LLM Provider dropdown
+		new Setting(containerEl)
+			.setName('LLM Provider')
+			.addDropdown(dropdown => dropdown
+				.addOptions({
+					'openai': 'OpenAI',
+					'openrouter': 'OpenRouter',
+					'ollama': 'Ollama'
+				})
+				.setValue(this.plugin.settings.currentProvider)
+				.onChange(async (value: ProviderType) => {
+					this.plugin.settings.currentProvider = value;
+					await this.plugin.saveSettings();
+					
+					// Preserve scroll position during refresh
+					const scrollTop = this.containerEl.scrollTop;
+					this.display();
+					this.containerEl.scrollTop = scrollTop;
+				}));
+
+		// Add provider-specific configuration
+		this.addProviderConfiguration(containerEl);
+	}
+
+	/**
+	 * Add Enhanced Transcript LLM Config section (conditional)
+	 */
+	private addEnhancedTranscriptLLMConfigSection(containerEl: HTMLElement): void {
+		// Only show if enhanced transcript is enabled
+		if (!this.plugin.settings.enableEnhancedTranscript) return;
+
+		containerEl.createEl('h2', { text: 'Enhanced Transcript LLM Config' });
+		containerEl.createEl('p', {
+			text: 'Set a different LLM for Enhanced Transcripts balancing price, quality, and privacy.',
+			cls: 'setting-item-description'
+		});
+
+		// Unique enhanced transcript LLM toggle
+		new Setting(containerEl)
+			.setName('Unique enhanced transcript LLM')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.externalTranscriptProvider !== this.plugin.settings.currentProvider)
+				.onChange(async (value) => {
+					if (value) {
+						// Enable unique provider - set to different from current
+						const otherProvider = this.plugin.settings.currentProvider === 'openai' ? 'openrouter' : 'openai';
+						this.plugin.settings.externalTranscriptProvider = otherProvider;
+					} else {
+						// Use same as primary
+						this.plugin.settings.externalTranscriptProvider = this.plugin.settings.currentProvider;
+					}
+					await this.plugin.saveSettings();
+					
+					// Preserve scroll position during refresh
+					const scrollTop = this.containerEl.scrollTop;
+					this.display();
+					this.containerEl.scrollTop = scrollTop;
+				}));
+
+		// Show provider dropdown only if unique LLM is enabled
+		if (this.plugin.settings.externalTranscriptProvider !== this.plugin.settings.currentProvider) {
+			new Setting(containerEl)
+				.setName('LLM Provider')
+				.addDropdown(dropdown => dropdown
+					.addOptions({
+						'openai': 'OpenAI',
+						'openrouter': 'OpenRouter',
+						'ollama': 'Ollama'
+					})
+					.setValue(this.plugin.settings.externalTranscriptProvider)
+					.onChange(async (value: ProviderType) => {
+						this.plugin.settings.externalTranscriptProvider = value;
+						await this.plugin.saveSettings();
+						
+						// Preserve scroll position during refresh
+						const scrollTop = this.containerEl.scrollTop;
+						this.display();
+						this.containerEl.scrollTop = scrollTop;
+					}));
+
+			// Add model selector for the enhanced transcript provider
+			this.addEnhancedTranscriptProviderConfiguration(containerEl);
+		}
+	}
+
+	/**
+	 * Add provider-specific model configuration for enhanced transcript LLM
+	 */
+	private addEnhancedTranscriptProviderConfiguration(containerEl: HTMLElement): void {
+		const provider = this.plugin.settings.externalTranscriptProvider;
+
+		if (provider === 'openai') {
+			this.addEnhancedTranscriptOpenAISettings(containerEl);
+		} else if (provider === 'openrouter') {
+			this.addEnhancedTranscriptOpenRouterSettings(containerEl);
+		} else if (provider === 'ollama') {
+			this.addEnhancedTranscriptOllamaSettings(containerEl);
+		}
+	}
+
+	/**
+	 * Add OpenAI model settings for enhanced transcript
+	 */
+	private addEnhancedTranscriptOpenAISettings(containerEl: HTMLElement): void {
+		// Only show model selection if API key is present
+		if (this.plugin.settings.providers.openai.apiKey) {
+			// OpenAI Model selection with refresh button
+			const openaiModelSetting = new Setting(containerEl)
+				.setName('Enhanced Transcript OpenAI Model')
+				.setDesc('Select an OpenAI model for enhanced transcript processing');
+
+			// Create container for dropdown and refresh button
+			const openaiModelContainer = openaiModelSetting.controlEl.createEl('div', { 
+				cls: 'openai-model-container',
+				attr: { style: 'display: flex; gap: 8px; align-items: center;' }
+			});
+
+			// Model dropdown
+			const openaiModelDropdown = openaiModelContainer.createEl('select', { 
+				cls: 'dropdown',
+				attr: { style: 'flex: 1; min-width: 200px;' }
+			});
+
+			// Refresh button
+			const openaiRefreshBtn = openaiModelContainer.createEl('button', { 
+				text: '🔄',
+				cls: 'mod-cta',
+				attr: { 
+					type: 'button',
+					style: 'padding: 4px 8px; min-width: auto;',
+					title: 'Refresh OpenAI models'
+				}
+			});
+
+			// Initialize models dropdown
+			this.initializeOpenAIModels(openaiModelDropdown);
+
+			// Set current value for enhanced transcript model
+			const currentModel = this.plugin.settings.externalTranscriptProviderModel || 'gpt-4o-mini';
+			openaiModelDropdown.value = currentModel;
+
+			// Handle model selection
+			openaiModelDropdown.addEventListener('change', async () => {
+				const selectedValue = openaiModelDropdown.value;
+				this.plugin.settings.externalTranscriptProviderModel = selectedValue;
+				await this.plugin.saveSettings();
+			});
+
+			// Handle refresh button click
+			openaiRefreshBtn.addEventListener('click', async () => {
+				openaiRefreshBtn.textContent = '⏳';
+				openaiRefreshBtn.disabled = true;
+				
+				try {
+					await this.refreshOpenAIModels(openaiModelDropdown);
+				} catch (error) {
+					console.error('Failed to refresh OpenAI models:', error);
+				} finally {
+					openaiRefreshBtn.textContent = '🔄';
+					openaiRefreshBtn.disabled = false;
+				}
+			});
+		}
+	}
+
+	/**
+	 * Add OpenRouter model settings for enhanced transcript
+	 */
+	private addEnhancedTranscriptOpenRouterSettings(containerEl: HTMLElement): void {
+		// Only show model selection if API key is present
+		if (this.plugin.settings.providers.openrouter.apiKey) {
+			// OpenRouter Model selection with refresh button
+			const openrouterModelSetting = new Setting(containerEl)
+				.setName('Enhanced Transcript OpenRouter Model')
+				.setDesc('Select an OpenRouter model for enhanced transcript processing');
+
+			// Create container for dropdown and refresh button
+			const openrouterModelContainer = openrouterModelSetting.controlEl.createEl('div', { 
+				cls: 'openrouter-model-container',
+				attr: { style: 'display: flex; gap: 8px; align-items: center;' }
+			});
+
+			// Model dropdown
+			const openrouterModelDropdown = openrouterModelContainer.createEl('select', { 
+				cls: 'dropdown',
+				attr: { style: 'flex: 1; min-width: 200px;' }
+			});
+
+			// Refresh button
+			const openrouterRefreshBtn = openrouterModelContainer.createEl('button', { 
+				text: '🔄',
+				cls: 'mod-cta',
+				attr: { 
+					type: 'button',
+					style: 'padding: 4px 8px; min-width: auto;',
+					title: 'Refresh OpenRouter models'
+				}
+			});
+
+			// Initialize models dropdown
+			this.initializeOpenRouterModels(openrouterModelDropdown);
+
+			// Set current value for enhanced transcript model
+			const currentModel = this.plugin.settings.externalTranscriptProviderModel || 'anthropic/claude-3.5-sonnet';
+			openrouterModelDropdown.value = currentModel;
+
+			// Handle model selection
+			openrouterModelDropdown.addEventListener('change', async () => {
+				const selectedValue = openrouterModelDropdown.value;
+				this.plugin.settings.externalTranscriptProviderModel = selectedValue;
+				await this.plugin.saveSettings();
+			});
+
+			// Handle refresh button click
+			openrouterRefreshBtn.addEventListener('click', async () => {
+				openrouterRefreshBtn.textContent = '⏳';
+				openrouterRefreshBtn.disabled = true;
+				
+				try {
+					await this.refreshOpenRouterModels(openrouterModelDropdown);
+				} catch (error) {
+					console.error('Failed to refresh OpenRouter models:', error);
+				} finally {
+					openrouterRefreshBtn.textContent = '🔄';
+					openrouterRefreshBtn.disabled = false;
+				}
+			});
+		}
+	}
+
+	/**
+	 * Add Ollama model settings for enhanced transcript
+	 */
+	private addEnhancedTranscriptOllamaSettings(containerEl: HTMLElement): void {
+		// Ollama Model selection with refresh button
+		const ollamaModelSetting = new Setting(containerEl)
+			.setName('Enhanced Transcript Ollama Model')
+			.setDesc('Select an Ollama model for enhanced transcript processing');
+
+		// Create container for dropdown and refresh button
+		const ollamaModelContainer = ollamaModelSetting.controlEl.createEl('div', { 
+			cls: 'ollama-model-container',
+			attr: { style: 'display: flex; gap: 8px; align-items: center;' }
+		});
+
+		// Model dropdown
+		const ollamaModelDropdown = ollamaModelContainer.createEl('select', { 
+			cls: 'dropdown',
+			attr: { style: 'flex: 1; min-width: 200px;' }
+		});
+
+		// Refresh button
+		const ollamaRefreshBtn = ollamaModelContainer.createEl('button', { 
+			text: '🔄',
+			cls: 'mod-cta',
+			attr: { 
+				type: 'button',
+				style: 'padding: 4px 8px; min-width: auto;',
+				title: 'Refresh Ollama models'
+			}
+		});
+
+		// Initialize models dropdown
+		this.initializeOllamaModels(ollamaModelDropdown);
+
+		// Set current value for enhanced transcript model
+		const currentModel = this.plugin.settings.externalTranscriptProviderModel || '';
+		ollamaModelDropdown.value = currentModel;
+
+		// Handle model selection
+		ollamaModelDropdown.addEventListener('change', async () => {
+			const selectedValue = ollamaModelDropdown.value;
+			this.plugin.settings.externalTranscriptProviderModel = selectedValue;
+			await this.plugin.saveSettings();
+		});
+
+		// Handle refresh button click
+		ollamaRefreshBtn.addEventListener('click', async () => {
+			ollamaRefreshBtn.textContent = '⏳';
+			ollamaRefreshBtn.disabled = true;
+			
+			try {
+				await this.refreshOllamaModels(ollamaModelDropdown);
+			} catch (error) {
+				console.error('Failed to refresh Ollama models:', error);
+			} finally {
+				ollamaRefreshBtn.textContent = '🔄';
+				ollamaRefreshBtn.disabled = false;
+			}
+		});
+	}
+
+	/**
+	 * Helper method to check if any AI provider is configured
+	 */
+	private hasConfiguredAIProvider(): boolean {
+		const currentProvider = this.plugin.settings.currentProvider;
+		const providerConfig = this.plugin.settings.providers[currentProvider];
+		
+		if (currentProvider === 'ollama') {
+			return !!(providerConfig as any).baseUrl && !!(providerConfig as any).model;
+		} else {
+			return !!(providerConfig as any).apiKey;
+		}
+	}
+
+	/**
+	 * Setup anchor link navigation within settings
+	 */
+	private setupAnchorLinks(containerEl: HTMLElement): void {
+		// Find all anchor links within the container
+		const anchorLinks = containerEl.querySelectorAll('a[href^="#"]');
+		
+		anchorLinks.forEach((link) => {
+			link.addEventListener('click', (e) => {
+				e.preventDefault();
+				const targetId = (link as HTMLAnchorElement).getAttribute('href')?.substring(1);
+				
+				if (targetId) {
+					const targetElement = containerEl.querySelector(`#${targetId}`);
+					if (targetElement) {
+						// Smooth scroll to target
+						targetElement.scrollIntoView({ 
+							behavior: 'smooth', 
+							block: 'start' 
+						});
+					} else {
+						// If target not found, it might be hidden - show a message
+						console.log(`Target section "${targetId}" not currently visible. Enable the required features to access this section.`);
+					}
+				}
+			});
+		});
+	}
 
 	/**
 	 * Add Transcript Quality section (optional enhancements)
@@ -1512,27 +2023,10 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 
 		// Show API inputs when external transcript detection is enabled
 		if (this.plugin.settings.checkExternalTranscripts) {
-			// YouTube API status indicator
-			const hasYouTubeAPI = !!this.plugin.settings.youtubeApiKey;
-			
-			if (hasYouTubeAPI) {
-				containerEl.createEl('div', {
-					cls: 'setting-item-description',
-					text: '✅ YouTube API configured in Basic Transcripts section',
-					attr: { style: 'color: var(--text-success, #00b300); margin-bottom: 8px;' }
-				});
-			} else {
-				containerEl.createEl('div', {
-					cls: 'setting-item-description',
-					text: '⚠️ Configure YouTube API in Basic Transcripts section above',
-					attr: { style: 'color: var(--text-warning, #ff8c00); margin-bottom: 8px;' }
-				});
-			}
-
 			// WebScraping.AI API Key
 			new Setting(containerEl)
 				.setName('WebScraping.AI API Key')
-				.setDesc('Enter your WebScraping.AI API key')
+				.setDesc('Enter your webscraping.ai API key')
 				.addText(text => text
 					.setPlaceholder('your-webscraping-ai-key')
 					.setValue(this.plugin.settings.webscrapingApiKey)
@@ -1541,12 +2035,17 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					}));
 
-			// Explanation of how it works
-			containerEl.createEl('div', {
-				cls: 'setting-item-description',
-				text: '💡 External transcript detection extracts URLs from video descriptions using YouTube Data API, then scrapes them for transcripts using WebScraping.AI.',
-				attr: { style: 'margin-top: 16px; padding: 12px; background: var(--background-secondary); border-radius: 8px; border-left: 4px solid var(--interactive-accent);' }
-			});
+			// YouTube Data API Key
+			new Setting(containerEl)
+				.setName('YouTube Data API Key')
+				.setDesc('Enter your YouTube Data API v3 key')
+				.addText(text => text
+					.setPlaceholder('AIzaSy...')
+					.setValue(this.plugin.settings.youtubeApiKey)
+					.onChange(async (value) => {
+						this.plugin.settings.youtubeApiKey = value;
+						await this.plugin.saveSettings();
+					}));
 		}
 	}
 

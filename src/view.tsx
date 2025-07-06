@@ -684,14 +684,18 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 						</div>
 
 						{/* Smart Analysis */}
-						{hasAIProvider && (
+						{plugin.settings.enableSummarization && (
 							<div className="control-group">
 								<div className="control-group-header">Smart Analysis</div>
 								<div className="control-group-buttons">
 									<button 
-										className="control-btn control-btn-ai"
-										onClick={generateSummary}
-										title={`Generate summary using ${currentProvider}`}
+										className={`control-btn ${hasAIProvider ? 'control-btn-ai' : 'control-btn-disabled'}`}
+										onClick={hasAIProvider ? generateSummary : undefined}
+										disabled={!hasAIProvider}
+										title={hasAIProvider ? 
+											`Generate summary using ${currentProvider}` : 
+											'Configure an AI provider in settings to enable summarization'
+										}
 										aria-label="Generate AI summary"
 									>
 										<span className="control-btn-icon">🤖</span>
@@ -705,11 +709,15 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 						<div className="control-group">
 							<div className="control-group-header">Transcripts</div>
 							<div className="control-group-buttons">
-								{hasAIProvider && plugin.settings.enhancedTranscriptFormatting && (
+								{plugin.settings.enableEnhancedTranscript && (
 									<button 
-										className="control-btn control-btn-secondary"
-										onClick={insertEnhancedTranscript}
-										title={`Get AI-enhanced transcript using ${currentProvider}`}
+										className={`control-btn ${hasAIProvider ? 'control-btn-secondary' : 'control-btn-disabled'}`}
+										onClick={hasAIProvider ? insertEnhancedTranscript : undefined}
+										disabled={!hasAIProvider}
+										title={hasAIProvider ? 
+											`Get AI-enhanced transcript using ${currentProvider}` : 
+											'Configure an AI provider in settings to enable enhanced transcripts'
+										}
 										aria-label="Insert enhanced transcript"
 									>
 										<span className="control-btn-icon">✨</span>
@@ -726,7 +734,7 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 									<span className="control-btn-text">Raw</span>
 								</button>
 								
-								{plugin.settings.checkExternalTranscripts && (
+								{plugin.settings.enableExternalTranscriptDetection && (
 									<button 
 										className={`control-btn ${hasExternalCapability ? 'control-btn-secondary' : 'control-btn-disabled'}`}
 										onClick={hasExternalCapability ? searchForExternalUrls : undefined}

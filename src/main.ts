@@ -623,6 +623,22 @@ Note: Set these shortcuts in Obsidian's Hotkey settings.`;
 			needsSave = true;
 		}
 
+		// Set default feature toggle settings if not set (for new progressive disclosure)
+		if (this.settings.enableSummarization === undefined) {
+			this.settings.enableSummarization = false; // Default to false for manual user enablement
+			needsSave = true;
+		}
+
+		if (this.settings.enableEnhancedTranscript === undefined) {
+			this.settings.enableEnhancedTranscript = false; // Default to false for manual user enablement
+			needsSave = true;
+		}
+
+		if (this.settings.enableExternalTranscriptDetection === undefined) {
+			this.settings.enableExternalTranscriptDetection = false; // Default to false for manual user enablement
+			needsSave = true;
+		}
+
 		// Save migrated settings if any changes were made
 		if (needsSave) {
 			console.log('Media Summarizer: Migrating settings to new provider structure');

@@ -119,7 +119,7 @@ export class ProviderManager {
       return await provider.getAvailableModels();
     } catch (error) {
       console.error(`Failed to get models for ${type}:`, error);
-      return provider.getConfig().availableModels;
+      return [];
     }
   }
 

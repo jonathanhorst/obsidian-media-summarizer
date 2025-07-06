@@ -12,13 +12,7 @@ export class OpenAIProvider extends BaseLLMProvider {
       baseUrl,
       apiKey,
       defaultModel: 'gpt-4o-mini',
-      availableModels: [
-        'gpt-4o-mini',
-        'gpt-4o',
-        'gpt-4-turbo',
-        'gpt-4',
-        'gpt-3.5-turbo'
-      ],
+      availableModels: [],
       requiresAuth: true,
       isLocal: false,
       maxTokens: 8000,
@@ -122,10 +116,10 @@ export class OpenAIProvider extends BaseLLMProvider {
         .map((model: any) => model.id)
         .sort();
 
-      return chatModels.length > 0 ? chatModels : this.config.availableModels;
+      return chatModels.length > 0 ? chatModels : [];
     } catch (error) {
-      console.warn('Failed to fetch OpenAI models, using defaults:', error);
-      return this.config.availableModels;
+      console.warn('Failed to fetch OpenAI models:', error);
+      return [];
     }
   }
 

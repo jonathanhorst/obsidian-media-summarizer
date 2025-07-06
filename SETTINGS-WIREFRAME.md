@@ -1,110 +1,85 @@
 # Media Summarizer Settings Wireframe
 
-> **Instructions**: Edit this file to propose changes to the settings organization. 
-> Move sections around, add/remove items, suggest new groupings, etc.
-> Then we can implement your changes quickly.
+# Media Summarizer Settings
+
+View the [documentation](USAGE.md) to answer your question.
+
+**Keyboard shortcuts**
+You can configure [keyboard shortcuts](link to hotkeys settings) for further playback control and other controls. Learn how to configure in the [documentation](USAGE.md).
+
+## Playback
+
+Essential features that work immediately without additional setup.
+
+**Seek seconds**: [1-10]
+How many seconds to skip forward/backward
+
+**Default playback speed**: [0.5x 0.75x 1x 1.25x 1.5x 2x] (1x by default)
+
+**Timestamp offset**: [toggle]
+Enable to offsett timestamps when inserting them into your notes
+
+**Timestamp offset amount**: [0-10 seconds] (2 by default)
+
+**Playback offset**: [toggle]
+Enable to auto-rewind after inserting timestamps
+
+**Playback offset amount**: [0-10 seconds] (2 by default)
+
+**Pause on insert**: [toggle]
+Automatically pause video when inserting timestamps
 
 ---
 
-## Current Settings Structure
+## Power Features
 
-### 🎬 Video Playback
-**Status**: ✅ No setup required  
-**Enables**: Basic video controls, timestamps
+Enhanced capabilities that require additional configuration.
 
-#### Video Controls
-- **Seek seconds**: [1-60] (How many seconds to skip forward/backward)
-- **Default playback speed**: [0.5x to 2x] (Starting speed for new videos)
 
-#### Timestamp Behavior  
-- **Timestamp offset**: [0-10 seconds] (Subtract seconds to capture context)
-- **Playback offset**: [0-10 seconds] (Auto-rewind when inserting timestamps)
-- **Pause on insert**: [toggle] (Automatically pause video when inserting timestamps)
+**Summarization**: [toggle]
+Get instant video summaries - Key points, main ideas, and takeaways.
+Requires an LLM to be configured.  [Configure an LLM](anchor link to section)  (only show this fow if the API is key is not entered)
 
-#### Formatting
-- **Enhanced transcript formatting**: [toggle] (Use AI to improve transcript readability)
+**Enhanced transcript**: [toggle]
+Get clean, readable transcripts with proper punctuation, paragraphs, and speaker identification.
+Requires an LLM to be configured.  [Configure an LLM](anchor link to section)  (only show this fow if the API is key is not entered)
 
----
+## Primary LLM Config
+(conditional)
 
-### 🤖 Smart Analysis
-**Status**: ⚠️ Choose provider to enable  
-**Enables**: Summarize, Enhanced transcripts
+Choose your preferred LLM provider and model based on your budget and privacy preferences.
 
-#### Choose Provider
-- **AI Provider**: [dropdown] (OpenAI/OpenRouter/Ollama)
+**LLM Provider**: [dropdown]
 
-#### [Current Provider] Configuration
-**For OpenAI**:
-- **OpenAI API Key**: [text input]
-- **OpenAI Model**: [dropdown with refresh button]
+**OpenAI API Key**: [text input] 
+**OpenAI Model**: [dropdown] (conditional)
 
-**For OpenRouter**:
-- **OpenRouter API Key**: [text input] 
-- **OpenRouter Model**: [dropdown with refresh button]
+**OpenRouter API Key**: [text input] 
+**OpenRouter Model**: [dropdown]  (conditional)
 
-**For Ollama**:
-- **Ollama Base URL**: [text input]
-- **Ollama Model**: [dropdown with refresh button]
+**Ollama Base URL**: [text input]
+**Ollama Model**: [dropdown with refresh button]
 
----
 
-### 📄 Transcripts
-**Status**: ⚠️ Needs YouTube API  
-**Enables**: Raw transcripts from YouTube
+## Enhanced Transcript LLM Config
+(conditional)
 
-#### Basic Transcript Access
-- **YouTube Data API Key**: [text input] (Enter your YouTube Data API v3 key)
+Set a different LLM for [Enhanced Transcripts](Link to settings section) balancing price, quality, and privacy.
+
+**Unique enhanced transcript LLM** [toggle]
+
+**LLM Provider**: [dropdown] (conditional)
+
 
 ---
 
 ### 🧪 Experimental Features
 
-#### External transcript detection
-- **Toggle**: [on/off] (Search for higher-quality transcripts in video descriptions)
+**External transcript detection** [toggle]
+Find higher-quality transcripts - Often more accurate than YouTube's auto-generated versions.
 
-**When enabled, shows**:
-- **YouTube API Status**: ✅ Configured in Basic Transcripts / ⚠️ Configure YouTube API above
-- **WebScraping.AI API Key**: [text input]
-- **Info box**: Explanation of how external transcript detection works
+**WebScraping.AI API Key**: [text input]
+Enter your webscraping.ai API key
 
----
-
-### ▶️ Advanced Options (Collapsible)
-
-#### External Transcript Provider Override
-- **Use different provider for external transcripts**: [toggle]  
-- **External transcript provider**: [dropdown] (When override enabled)
-- **External transcript model**: [dropdown] (When override enabled)
-
-#### Development & Testing
-- **Run integration tests**: [button]
-
----
-
-## Notes / Issues to Address
-
-1. **"Choose provider to enable" showing when Ollama is configured** - Status detection bug
-2. **Multiple AI provider sections** - Could be consolidated
-3. **Advanced Options** - May have too much complexity for average users
-4. **Status indicators** - Some are confusing or incorrect
-
----
-
-## Proposed Changes Section
-*Edit below to suggest reorganization*
-
-### Option A: Consolidate AI Sections?
-- Merge Smart Analysis provider selection with Transcripts enhanced formatting?
-
-### Option B: Simplify Status Messages?
-- Remove confusing status indicators?
-- Focus on clear error states only?
-
-### Option C: Regroup by User Goals?
-- "Getting Started" (no API keys needed)
-- "AI Features" (requires setup)  
-- "Power User" (experimental/advanced)
-
----
-
-**Instructions**: Edit any section above to propose changes, then let me know!
+**YouTube Data API Key**: [text input]
+Enter your YouTube Data API v3 key
