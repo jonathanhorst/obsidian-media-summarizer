@@ -437,3 +437,210 @@
 .theme-dark .media-summarizer-modal {
 	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
+
+/* ============================================ */
+/* NEW UX: Control Groups & Improved Buttons   */
+/* ============================================ */
+
+/* Update main controls container */
+.media-summarizer-controls {
+	flex-shrink: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	padding: 16px;
+	border-top: 1px solid var(--background-modifier-border);
+	background: var(--background-primary);
+}
+
+/* Control group container */
+.control-group {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+/* Control group headers */
+.control-group-header {
+	font-size: 0.75em;
+	font-weight: 600;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+	margin-bottom: 4px;
+}
+
+/* Control group buttons container */
+.control-group-buttons {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+/* New button base styles - smaller, more refined */
+.control-btn {
+	background: var(--interactive-normal);
+	color: var(--text-normal);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	padding: 6px 12px;
+	font-size: 0.8em;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.15s ease;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	white-space: nowrap;
+	min-height: 32px;
+	position: relative;
+}
+
+.control-btn:hover:not(:disabled) {
+	background: var(--interactive-hover);
+	border-color: var(--background-modifier-border-hover);
+	transform: translateY(-1px);
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.control-btn:active:not(:disabled) {
+	transform: translateY(0);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* Button icon styles */
+.control-btn-icon {
+	font-size: 1em;
+	line-height: 1;
+	opacity: 0.8;
+}
+
+/* Button text styles */
+.control-btn-text {
+	font-size: 0.8em;
+	font-weight: 500;
+}
+
+/* Button variants */
+.control-btn-primary {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	border-color: var(--interactive-accent);
+}
+
+.control-btn-primary:hover:not(:disabled) {
+	background: var(--interactive-accent-hover);
+	border-color: var(--interactive-accent-hover);
+}
+
+.control-btn-ai {
+	background: var(--color-purple);
+	color: white;
+	border-color: var(--color-purple);
+}
+
+.control-btn-ai:hover:not(:disabled) {
+	background: var(--color-purple-hover, var(--color-purple));
+	filter: brightness(1.1);
+}
+
+.control-btn-secondary {
+	background: var(--interactive-normal);
+	color: var(--text-normal);
+	border-color: var(--background-modifier-border);
+}
+
+.control-btn-external {
+	background: var(--color-green);
+	color: white;
+	border-color: var(--color-green);
+}
+
+.control-btn-external:hover:not(:disabled) {
+	background: var(--color-green-hover, var(--color-green));
+	filter: brightness(1.1);
+}
+
+.control-btn-disabled {
+	background: var(--background-modifier-border);
+	color: var(--text-muted);
+	border-color: var(--background-modifier-border);
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+.control-btn-disabled:hover {
+	transform: none;
+	box-shadow: none;
+}
+
+.control-btn:disabled {
+	background: var(--background-modifier-border);
+	color: var(--text-muted);
+	border-color: var(--background-modifier-border);
+	cursor: not-allowed;
+	opacity: 0.6;
+}
+
+.control-btn:disabled:hover {
+	transform: none;
+	box-shadow: none;
+}
+
+/* Configuration hint styles */
+.control-hint {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 12px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 8px;
+	margin-top: 8px;
+}
+
+.control-hint-icon {
+	font-size: 1.1em;
+	opacity: 0.7;
+}
+
+.control-hint-text {
+	font-size: 0.8em;
+	color: var(--text-muted);
+	line-height: 1.4;
+}
+
+.control-hint-text a {
+	color: var(--text-accent);
+	text-decoration: none;
+}
+
+.control-hint-text a:hover {
+	text-decoration: underline;
+}
+
+/* Responsive design for smaller screens */
+@media (max-width: 300px) {
+	.control-group-buttons {
+		flex-direction: column;
+	}
+	
+	.control-btn {
+		justify-content: center;
+	}
+}
+
+/* Focus states for accessibility */
+.control-btn:focus {
+	outline: 2px solid var(--interactive-accent);
+	outline-offset: 2px;
+}
+
+/* Dark theme specific adjustments */
+.theme-dark .control-btn {
+	border-color: var(--background-modifier-border);
+}
+
+.theme-dark .control-hint {
+	background: var(--background-secondary);
+}

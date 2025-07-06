@@ -27,119 +27,31 @@ An Obsidian plugin that allows you to view YouTube videos in a custom pane while
 3. Run `npm run build` to build the plugin
 4. Copy `main.js`, `manifest.json`, and `styles.css` to your plugins folder
 
-## Configuration
+## Quick Start
 
-The plugin uses a "value first" settings approach - you can start using playback controls immediately, then add AI features as needed.
+1. **Add video to your note** - Include YouTube URL in frontmatter:
+   ```yaml
+   ---
+   media_url: https://www.youtube.com/watch?v=VIDEO_ID
+   ---
+   ```
 
-### Quick Start (No API Keys Required)
-1. **Playback Controls**: Configure video playback, timestamps, and keyboard shortcuts
-2. **Keyboard Shortcuts**: Go to Settings → Hotkeys, search "Media Summarizer", assign shortcuts
+2. **Open Media Summarizer** - Click play button (▶️) in ribbon or use Command Palette
 
-### AI Features (Requires API Keys)
-Choose your preferred AI provider:
+3. **Start note-taking** - Use timestamp button to insert current video time into notes
 
-#### OpenAI
-1. Go to Settings → Media Summarizer → AI & Processing
-2. Select "OpenAI" as your provider
-3. Enter your API key from [OpenAI Platform](https://platform.openai.com/api-keys)
-4. Choose your preferred model (GPT-4o-mini recommended for best balance)
+4. **Configure AI (optional)** - Add API key in Settings → AI Summarization for transcript summaries
 
-#### OpenRouter
-1. Select "OpenRouter" as your provider  
-2. Enter your API key from [OpenRouter](https://openrouter.ai/keys)
-3. Choose from 100+ available models (Claude 3.5 Sonnet recommended)
+## 📖 Complete Usage Guide
 
-#### Ollama (Local AI)
-1. Install [Ollama](https://ollama.ai/) and run: `ollama pull llama3.1:8b`
-2. Select "Ollama" as your provider
-3. Plugin will auto-detect your installed models
+For detailed setup instructions, configuration options, keyboard shortcuts, troubleshooting, and advanced features, see the **[Complete Usage Guide](USAGE.md)**.
 
-### YouTube Integration (Optional)
-- **YouTube API Key**: Enable transcript features and external transcript detection
-- **WebScraping.AI Key**: Enable higher-quality external transcript fetching
-
-## Usage
-
-### Step-by-Step Guide
-
-#### 1. Add Video to Your Note
-Include a YouTube URL in your note's frontmatter:
-```yaml
----
-media_url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
----
-```
-
-#### 2. Open Media Summarizer
-- Click the play button (▶️) in the ribbon, or
-- Use Command Palette: "Media Summarizer: Open view"
-
-#### 3. Control Video Playback
-**Using Buttons:**
-- 🕒 **Timestamp**: Insert current video time
-- 📝 **Summarize**: Generate AI summary
-- 📄 **Enhanced Transcript**: AI-formatted transcript (if enabled)
-- 📄 **Raw Transcript**: Original YouTube transcript
-- 🔍 **External Search**: Find higher-quality transcripts
-
-**Using Keyboard Shortcuts** (configure in Settings → Hotkeys):
-- **Insert Timestamp**: ⌃I (suggested)
-- **Play/Pause**: ⌃K (suggested)
-- **Rewind**: ⌃J (suggested)
-- **Fast Forward**: ⌃L (suggested)
-- **Speed Up/Down**: Shift+>/< (suggested)
-- **Mute**: M (suggested)
-
-#### 4. AI-Powered Features
-
-**Summarization:**
-- Click "📝 Summarize" to generate comprehensive video summaries
-- Uses your configured AI provider (OpenAI/OpenRouter/Ollama)
-- Automatically chunks long transcripts for better accuracy
-
-**Enhanced Transcripts:**
-- Toggle in Settings → Playback & Interaction → Formatting
-- Improves punctuation, speaker identification, and organization
-- Uses video title/description for better name spelling
-
-**External Transcript Detection:**
-- Enable in Settings → YouTube Integration
-- Automatically searches video descriptions for transcript links
-- Often provides higher accuracy than YouTube's auto-generated transcripts
-- Saves on AI processing costs
-
-### Advanced Features
-
-#### Timestamp Behavior
-- **Timestamp Offset**: Subtract seconds to capture context before current moment
-- **Playback Offset**: Auto-rewind when inserting timestamps for context review
-- **Pause on Insert**: Automatically pause video when inserting timestamps
-
-#### Multi-Provider AI
-- **Fallback Support**: Automatically try backup provider if primary fails
-- **Dynamic Model Detection**: Fetches latest available models from APIs
-- **Custom Models**: Enter any model name for experimental/new releases
-
-#### Video Persistence
-- Videos maintain playback state when switching between notes
-- Smart refresh only when `media_url` actually changes
-- Continues playing while inserting timestamps or summaries
-
-### Troubleshooting
-
-**Video not loading?**
-- Check that `media_url` is correctly formatted in frontmatter
-- Ensure YouTube URL is accessible (not private/restricted)
-
-**AI features not working?**
-- Verify API keys in Settings → AI & Processing
-- Check your AI provider account has sufficient credits
-- Try the fallback provider if enabled
-
-**No transcripts available?**
-- Some videos don't have auto-generated transcripts
-- Try enabling external transcript detection
-- Check if video has closed captions enabled
+The usage guide covers:
+- **Detailed Configuration**: Step-by-step setup for OpenAI, OpenRouter, and Ollama
+- **All Features**: Video controls, AI summarization, enhanced transcripts, external transcript detection
+- **Keyboard Shortcuts**: Complete list with recommended key assignments
+- **Advanced Features**: Multi-provider setup, fallback configuration, timestamp behavior
+- **Troubleshooting**: Solutions for common issues and performance optimization
 
 ## Development
 

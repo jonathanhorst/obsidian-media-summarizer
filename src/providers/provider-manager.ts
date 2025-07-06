@@ -7,8 +7,6 @@ export type ProviderType = 'openai' | 'openrouter' | 'ollama';
 
 export interface ProviderManagerSettings {
   currentProvider: ProviderType;
-  enableFallback: boolean;
-  fallbackProvider?: ProviderType;
   
   // Provider configurations
   openai: {
@@ -27,7 +25,6 @@ export interface ProviderManagerSettings {
 
 /**
  * Provider Manager - handles switching between different LLM providers
- * and provides fallback mechanisms for reliability
  */
 export class ProviderManager {
   private providers: Map<ProviderType, BaseLLMProvider> = new Map();
@@ -127,57 +124,27 @@ export class ProviderManager {
   }
 
   /**
-   * Make a chat completion request with fallback support
+   * Make a chat completion request
    */
   async chatCompletion(request: LLMRequest, useCurrentProvider = true): Promise<LLMResponse> {
     const providerType = useCurrentProvider ? this.settings.currentProvider : this.determineBestProvider(request);
     
-    try {
-      // Try the primary provider
-      const provider = this.providers.get(providerType);
-      if (!provider) {
-        throw new Error(`Provider ${providerType} is not available`);
-      }
-
-      // Use the provider's default model if not specified
-      const actualRequest = {
-        ...request,
-        model: request.model || provider.getConfig().defaultModel
-      };
-
-      return await provider.chatCompletion(actualRequest);
-      
-    } catch (error) {
-      console.error(`Primary provider ${providerType} failed:`, error);
-      
-      // Try fallback if enabled
-      if (this.settings.enableFallback && this.settings.fallbackProvider && 
-          this.settings.fallbackProvider !== providerType) {
-        
-        console.log(`Attempting fallback to ${this.settings.fallbackProvider}...`);
-        
-        try {
-          const fallbackProvider = this.providers.get(this.settings.fallbackProvider);
-          if (fallbackProvider) {
-            const fallbackRequest = {
-              ...request,
-              model: request.model || fallbackProvider.getConfig().defaultModel
-            };
-            
-            return await fallbackProvider.chatCompletion(fallbackRequest);
-          }
-        } catch (fallbackError) {
-          console.error(`Fallback provider ${this.settings.fallbackProvider} also failed:`, fallbackError);
-        }
-      }
-      
-      // If all else fails, throw the original error
-      throw error;
+    const provider = this.providers.get(providerType);
+    if (!provider) {
+      throw new Error(`Provider ${providerType} is not available`);
     }
+
+    // Use the provider's default model if not specified
+    const actualRequest = {
+      ...request,
+      model: request.model || provider.getConfig().defaultModel
+    };
+
+    return await provider.chatCompletion(actualRequest);
   }
 
   /**
-   * Summarize transcript using the current provider with fallback
+   * Summarize transcript using the current provider
    */
   async summarizeTranscript(
     transcript: string,
@@ -251,7 +218,7 @@ export class ProviderManager {
   }
 
   /**
-   * Enhance transcript using the current provider with fallback
+   * Enhance transcript using the current provider
    */
   async enhanceTranscript(
     transcript: string,

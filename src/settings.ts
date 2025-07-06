@@ -12,8 +12,6 @@ export interface MediaSummarizerSettings {
 	
 	// Multi-provider settings
 	currentProvider: ProviderType;
-	enableFallback: boolean;
-	fallbackProvider: ProviderType;
 	
 	// Provider-specific configurations
 	providers: {
@@ -58,8 +56,6 @@ export const DEFAULT_SETTINGS: MediaSummarizerSettings = {
 	
 	// Multi-provider settings
 	currentProvider: 'openai',
-	enableFallback: false,
-	fallbackProvider: 'openrouter',
 	
 	// Provider-specific configurations
 	providers: {
@@ -73,7 +69,7 @@ export const DEFAULT_SETTINGS: MediaSummarizerSettings = {
 		},
 		ollama: {
 			baseUrl: 'http://localhost:11434',
-			model: 'llama3.1:8b'
+			model: ''
 		}
 	},
 	
@@ -115,35 +111,26 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		// Plugin title and description
-		containerEl.createEl('h2', { text: 'Media Summarizer Settings' });
-		
-		containerEl.createEl('p', {
-			text: 'Configure Media Summarizer to enhance your video note-taking experience. Start with playback controls for immediate value, then add AI features as needed.'
+		containerEl.createEl('h1', { text: 'Media Summarizer Settings' });
+
+		// Documentation link
+		containerEl.createEl('a', {
+			text: 'View usage guide',
+			href: 'https://github.com/jonathanhorst/obsidian-media-summarizer/blob/main/USAGE.md',
+			attr: { 
+				target: '_blank',
+				style: 'margin-bottom: 20px; display: block;'
+			}
 		});
 
-		// 🎮 PLAYBACK & INTERACTION SECTION (Immediate value, no APIs needed)
-		this.addPlaybackInteractionSection(containerEl);
-
-		// 📺 YOUTUBE INTEGRATION SECTION (Basic API requirement)
-		this.addYouTubeIntegrationSection(containerEl);
-
-		// 📊 AI & PROCESSING SECTION (Optional enhancement)
-		this.addAIProcessingSection(containerEl);
-
-		// 🔧 ADVANCED SETTINGS SECTION (Expert configuration)
-		this.addAdvancedSettingsSection(containerEl);
+		// FEATURE-BASED ORGANIZATION (Option 2)
+		this.addVideoPlaybackSection(containerEl);
+		this.addAISummarizationSection(containerEl);
+		this.addBasicTranscriptsSection(containerEl);
+		this.addExperimentalFeaturesSection(containerEl);
+		this.addAdvancedOptionsSection(containerEl);
 	}
 
-	/**
-	 * Add provider status indicators
-	 */
-	private addProviderStatus(containerEl: HTMLElement): void {
-		const statusEl = containerEl.createEl('div', { cls: 'provider-status' });
-		statusEl.createEl('div', { 
-			text: '⚠️ Provider status will be checked when you test connections.',
-			cls: 'setting-item-description'
-		});
-	}
 
 	/**
 	 * Add provider-specific configuration sections
@@ -159,8 +146,6 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 			this.addOllamaSettings(containerEl);
 		}
 
-		// Fallback settings
-		this.addFallbackSettings(containerEl);
 	}
 
 	/**
@@ -171,7 +156,7 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('OpenAI API Key')
-			.setDesc('Enter your OpenAI API key. Get your key from https://platform.openai.com/api-keys')
+			.setDesc('Enter your OpenAI API key')
 			.addText(text => text
 				.setPlaceholder('sk-...')
 				.setValue(this.plugin.settings.providers.openai.apiKey)
@@ -274,10 +259,6 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 			}
 		});
 
-		containerEl.createEl('div', {
-			cls: 'setting-item-description',
-			text: '💡 GPT-4o-mini offers the best balance of quality and cost. GPT-4o is the latest model with the highest quality.'
-		});
 	}
 
 	/**
@@ -288,7 +269,7 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('OpenRouter API Key')
-			.setDesc('Enter your OpenRouter API key. Get your key from https://openrouter.ai/keys')
+			.setDesc('Enter your OpenRouter API key')
 			.addText(text => text
 				.setPlaceholder('sk-or-v1-...')
 				.setValue(this.plugin.settings.providers.openrouter.apiKey)
@@ -385,10 +366,6 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 			}
 		});
 
-		containerEl.createEl('div', {
-			cls: 'setting-item-description',
-			text: '💡 OpenRouter provides access to 100+ models. Claude 3.5 Sonnet excels at transcript enhancement.'
-		});
 	}
 
 	/**
@@ -399,7 +376,7 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Ollama Base URL')
-			.setDesc('URL where Ollama is running (default: http://localhost:11434)')
+			.setDesc('Ollama server URL')
 			.addText(text => text
 				.setPlaceholder('http://localhost:11434')
 				.setValue(this.plugin.settings.providers.ollama.baseUrl)
@@ -460,64 +437,9 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 			}
 		});
 
-		containerEl.createEl('div', {
-			cls: 'setting-item-description',
-			text: '💡 Ollama provides free, local AI models. Install from https://ollama.ai/. Click refresh to detect installed models.'
-		});
 
-		// Ollama setup instructions
-		const ollamaSetup = containerEl.createEl('details');
-		ollamaSetup.createEl('summary', { text: 'Ollama Setup Instructions' });
-		const setupContent = ollamaSetup.createEl('div', { cls: 'ollama-setup' });
-		setupContent.createEl('p', { text: '1. Download Ollama from https://ollama.ai/' });
-		setupContent.createEl('p', { text: '2. Install and start Ollama: ollama serve' });
-		setupContent.createEl('p', { text: '3. Download a model: ollama pull llama3.1:8b' });
-		setupContent.createEl('p', { text: '4. Verify installation by clicking the refresh button above' });
-		setupContent.createEl('p', { text: '5. Popular models: llama3.1:8b, mistral:7b, codellama:7b, phi3:3.8b' });
 	}
 
-	/**
-	 * Add fallback settings
-	 */
-	private addFallbackSettings(containerEl: HTMLElement): void {
-		containerEl.createEl('h4', { text: 'Fallback Settings' });
-
-		new Setting(containerEl)
-			.setName('Enable Fallback')
-			.setDesc('Automatically try a different provider if the primary one fails')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.enableFallback)
-				.onChange(async (value) => {
-					this.plugin.settings.enableFallback = value;
-					await this.plugin.saveSettings();
-					this.display(); // Refresh to show/hide fallback provider setting
-				}));
-
-		if (this.plugin.settings.enableFallback) {
-			new Setting(containerEl)
-				.setName('Fallback Provider')
-				.setDesc('Provider to use if the primary provider fails')
-				.addDropdown(dropdown => {
-					const options: Record<string, string> = {};
-					const providers = ['openai', 'openrouter', 'ollama'] as ProviderType[];
-					
-					providers.forEach(provider => {
-						if (provider !== this.plugin.settings.currentProvider) {
-							options[provider] = provider === 'openai' ? 'OpenAI' : 
-											   provider === 'openrouter' ? 'OpenRouter' : 'Ollama';
-						}
-					});
-
-					return dropdown
-						.addOptions(options)
-						.setValue(this.plugin.settings.fallbackProvider)
-						.onChange(async (value: ProviderType) => {
-							this.plugin.settings.fallbackProvider = value;
-							await this.plugin.saveSettings();
-						});
-				});
-		}
-	}
 
 	/**
 	 * Initialize Ollama models dropdown
@@ -591,8 +513,20 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 				option.selected = true;
 			}
 
-			// If no model is selected, select the first one
-			if (!dropdown.value && models.length > 0) {
+			// Handle no models found
+			if (models.length === 0) {
+				dropdown.createEl('option', { 
+					text: 'No models found - Install models first', 
+					value: '' 
+				}).selected = true;
+				
+				// Clear the saved model if no models are available
+				if (this.plugin.settings.providers.ollama.model) {
+					this.plugin.settings.providers.ollama.model = '';
+					await this.plugin.saveSettings();
+				}
+			} else if (!dropdown.value) {
+				// If no model is selected, select the first one
 				dropdown.value = models[0];
 				this.plugin.settings.providers.ollama.model = models[0];
 				await this.plugin.saveSettings();
@@ -610,9 +544,9 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 	private populateDefaultOllamaModels(dropdown: HTMLSelectElement): void {
 		dropdown.empty();
 		
-		// Add status message
+		// Add helpful status message
 		dropdown.createEl('option', { 
-			text: 'Ollama not running - showing common models', 
+			text: 'Ollama not running - Install and start Ollama first', 
 			value: '',
 			attr: { disabled: 'true' }
 		});
@@ -1061,15 +995,11 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 	}
 
 	/**
-	 * Add Playback & Interaction section (immediate value, no API barriers)
+	 * Add Video Playback section (no setup required)
 	 */
-	private addPlaybackInteractionSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h3', { text: '🎮 Playback & Interaction' });
+	private addVideoPlaybackSection(containerEl: HTMLElement): void {
+		containerEl.createEl('h3', { text: 'Video Playback' });
 		
-		containerEl.createEl('p', {
-			text: 'Configure video playback behavior. These settings work immediately without any API keys.',
-			cls: 'setting-item-description'
-		});
 
 		// Video Controls subsection
 		containerEl.createEl('h4', { text: 'Video Controls' });
@@ -1077,7 +1007,7 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 		// Seek seconds setting
 		new Setting(containerEl)
 			.setName('Seek seconds')
-			.setDesc('Number of seconds to skip forward/backward when using seek controls')
+			.setDesc('Skip seconds for forward/backward')
 			.addSlider(slider => slider
 				.setLimits(1, 60, 1)
 				.setDynamicTooltip()
@@ -1090,7 +1020,6 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 		// Default playback speed setting
 		new Setting(containerEl)
 			.setName('Default playback speed')
-			.setDesc('Default video playback speed when loading videos')
 			.addDropdown(dropdown => dropdown
 				.addOptions({
 					'0.5': '0.5x',
@@ -1112,7 +1041,7 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 		// Timestamp offset setting
 		new Setting(containerEl)
 			.setName('Timestamp offset')
-			.setDesc('Seconds to subtract from current time when inserting timestamps (captures context before the current moment)')
+			.setDesc('Seconds to subtract when inserting timestamps')
 			.addSlider(slider => slider
 				.setLimits(0, 10, 1)
 				.setDynamicTooltip()
@@ -1125,7 +1054,7 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 		// Playback offset setting
 		new Setting(containerEl)
 			.setName('Playback offset')
-			.setDesc('Seconds to rewind video playback when inserting timestamps (automatically review context)')
+			.setDesc('Seconds to rewind after inserting timestamps')
 			.addSlider(slider => slider
 				.setLimits(0, 10, 1)
 				.setDynamicTooltip()
@@ -1138,7 +1067,6 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 		// Pause on timestamp insert setting
 		new Setting(containerEl)
 			.setName('Pause on timestamp insert')
-			.setDesc('Automatically pause the video when inserting a timestamp')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.pauseOnTimestampInsert)
 				.onChange(async (value) => {
@@ -1152,7 +1080,7 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 		// Enhanced transcript formatting setting
 		new Setting(containerEl)
 			.setName('Enhanced transcript formatting')
-			.setDesc('Use AI to improve YouTube transcript readability with better punctuation, speaker identification, and organized sections')
+			.setDesc('Use AI to improve transcript readability')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.enhancedTranscriptFormatting)
 				.onChange(async (value) => {
@@ -1160,127 +1088,141 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
-		// Enhancement details
-		containerEl.createEl('div', {
-			cls: 'setting-item-description',
-			text: '💡 Enhancement uses video title and description to improve name spelling and speaker identification.'
-		});
 	}
 
 
 	/**
-	 * Add YouTube Integration section (basic API requirement)
+	 * Add Transcript Quality section (optional enhancements)
 	 */
-	private addYouTubeIntegrationSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h3', { text: '📺 YouTube Integration' });
-		
-		containerEl.createEl('p', {
-			text: 'Enable transcript features with the YouTube Data API. This unlocks basic transcripts and external transcript detection.',
-			cls: 'setting-item-description'
-		});
+	private addTranscriptQualitySection(containerEl: HTMLElement): void {
+		containerEl.createEl('h3', { text: 'Transcript Quality' });
 
 		// YouTube Data API Key setting
 		new Setting(containerEl)
 			.setName('YouTube Data API Key')
-			.setDesc('Enter your YouTube Data API v3 key to extract video descriptions and enable transcript features. Get your key from Google Cloud Console with YouTube Data API v3 enabled.')
+			.setDesc('Enter your YouTube Data API v3 key')
 			.addText(text => text
 				.setPlaceholder('AIzaSy...')
 				.setValue(this.plugin.settings.youtubeApiKey)
 				.onChange(async (value) => {
 					this.plugin.settings.youtubeApiKey = value;
 					await this.plugin.saveSettings();
+					
+					// Preserve scroll position during refresh
+					const scrollTop = this.containerEl.scrollTop;
 					this.display(); // Refresh to show/hide dependent sections
+					this.containerEl.scrollTop = scrollTop;
 				}));
 
-		// Only show external transcript options if YouTube API is configured
-		if (this.plugin.settings.youtubeApiKey) {
-			// External Transcript Enhancement subsection
-			containerEl.createEl('h4', { text: 'External Transcript Enhancement' });
-			
-			containerEl.createEl('p', {
-				text: 'Check video descriptions for links to higher-quality transcripts. This can provide better accuracy and lower AI processing costs.',
-				cls: 'setting-item-description'
-			});
+		// External Transcript Enhancement subsection (always visible)
+		containerEl.createEl('h4', { text: 'External Transcript Enhancement' });
 
-			// External transcript setting
-			new Setting(containerEl)
-				.setName('Check for external transcripts')
-				.setDesc('Automatically search video descriptions for transcript links before using YouTube\'s auto-generated transcripts')
-				.addToggle(toggle => toggle
-					.setValue(this.plugin.settings.checkExternalTranscripts)
-					.onChange(async (value) => {
+		const hasYouTubeAPI = !!this.plugin.settings.youtubeApiKey;
+
+		// External transcript setting
+		new Setting(containerEl)
+			.setName('Check for external transcripts')
+			.setDesc('Search for higher-quality transcripts in video descriptions')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.checkExternalTranscripts && hasYouTubeAPI)
+				.setDisabled(!hasYouTubeAPI)
+				.onChange(async (value) => {
+					if (hasYouTubeAPI) {
 						this.plugin.settings.checkExternalTranscripts = value;
 						await this.plugin.saveSettings();
+						
+						// Preserve scroll position during refresh
+						const scrollTop = this.containerEl.scrollTop;
 						this.display(); // Refresh to show/hide web scraping settings
-					}));
+						this.containerEl.scrollTop = scrollTop;
+					}
+				}));
 
-			// Only show web scraping settings if external transcripts are enabled
-			if (this.plugin.settings.checkExternalTranscripts) {
-				// WebScraping.AI API Key setting
-				new Setting(containerEl)
-					.setName('WebScraping.AI API Key')
-					.setDesc('Enter your WebScraping.AI API key to enable external transcript fetching. Get your key from https://webscraping.ai')
-					.addText(text => text
-						.setPlaceholder('your-webscraping-ai-key')
-						.setValue(this.plugin.settings.webscrapingApiKey)
-						.onChange(async (value) => {
-							this.plugin.settings.webscrapingApiKey = value;
-							await this.plugin.saveSettings();
-						}));
+		// WebScraping.AI API Key setting (always visible, disabled when dependencies not met)
+		const webScrapingDisabled = !hasYouTubeAPI || !this.plugin.settings.checkExternalTranscripts;
+		new Setting(containerEl)
+			.setName('WebScraping.AI API Key')
+			.setDesc('Enter your WebScraping.AI API key')
+			.addText(text => text
+				.setPlaceholder('your-webscraping-ai-key')
+				.setValue(this.plugin.settings.webscrapingApiKey)
+				.setDisabled(webScrapingDisabled)
+				.onChange(async (value) => {
+					if (!webScrapingDisabled) {
+						this.plugin.settings.webscrapingApiKey = value;
+						await this.plugin.saveSettings();
+					}
+				}));
 
-				// External transcript provider setting
-				new Setting(containerEl)
-					.setName('External Transcript AI Provider')
-					.setDesc('Choose the AI provider for processing external transcripts')
-					.addDropdown(dropdown => dropdown
-						.addOptions({
-							'openai': 'OpenAI (GPT models)',
-							'openrouter': 'OpenRouter (Multiple models)',
-							'ollama': 'Ollama (Local models)'
-						})
-						.setValue(this.plugin.settings.externalTranscriptProvider || 'openai')
-						.onChange(async (value: ProviderType) => {
-							this.plugin.settings.externalTranscriptProvider = value;
-							await this.plugin.saveSettings();
-							this.display(); // Refresh to show provider-specific model options
-						}));
-
-				// External transcript model setting (dynamic based on provider)
-				this.addExternalTranscriptModelSetting(containerEl);
-
-				// External transcript details
-				containerEl.createEl('div', {
-					cls: 'setting-item-description',
-					text: '💡 External transcript detection extracts URLs from video descriptions using YouTube Data API, then scrapes them for transcripts using WebScraping.AI.'
-				});
-			}
-		} else {
-			// Show info about what YouTube API enables
+		// Show dependency requirements
+		if (!hasYouTubeAPI) {
 			containerEl.createEl('div', {
 				cls: 'setting-item-description',
-				text: '📋 YouTube API enables: Basic transcripts, external transcript detection, video metadata access, and enhanced AI processing.'
+				text: '⚠️ YouTube Data API key required above to enable external transcript features.'
+			});
+		} else if (!this.plugin.settings.checkExternalTranscripts) {
+			containerEl.createEl('div', {
+				cls: 'setting-item-description',
+				text: '💡 Enable "Check for external transcripts" above to configure WebScraping API.'
+			});
+		} else {
+			// External transcript details
+			containerEl.createEl('div', {
+				cls: 'setting-item-description',
+				text: '💡 External transcript detection extracts URLs from video descriptions using YouTube Data API, then scrapes them for transcripts using WebScraping.AI.'
 			});
 		}
 	}
 
 	/**
-	 * Add AI & Processing section (optional enhancement)
+	 * Add AI Summarization section (main feature)
 	 */
-	private addAIProcessingSection(containerEl: HTMLElement): void {
-		containerEl.createEl('h3', { text: '📊 AI & Processing' });
+	private addAISummarizationSection(containerEl: HTMLElement): void {
+		containerEl.createEl('h3', { text: 'AI Summarization' });
+
+		// Status and features
+		const currentProvider = this.plugin.settings.currentProvider;
+		let hasAIProvider = false;
 		
-		containerEl.createEl('p', {
-			text: 'Configure AI providers for transcript summarization and enhancement. This enables the most powerful features of Media Summarizer.',
-			cls: 'setting-item-description'
+		if (currentProvider) {
+			const providerConfig = this.plugin.settings.providers[currentProvider];
+			if (currentProvider === 'ollama') {
+				const baseUrl = (providerConfig as any).baseUrl;
+				const model = (providerConfig as any).model;
+				hasAIProvider = !!(baseUrl && model);
+				console.log('Ollama config check:', { currentProvider, baseUrl, model, hasAIProvider });
+			} else {
+				hasAIProvider = !!(providerConfig as any).apiKey;
+			}
+		}
+		
+		if (hasAIProvider) {
+			containerEl.createEl('div', {
+				text: `✅ Ready - Using ${this.plugin.settings.currentProvider}`,
+				cls: 'setting-item-description',
+				attr: { style: 'color: var(--text-success, #00b300); font-weight: 500; margin-bottom: 8px;' }
+			});
+		} else {
+			containerEl.createEl('div', {
+				text: '⚠️ Choose provider to enable',
+				cls: 'setting-item-description',
+				attr: { style: 'color: var(--text-warning, #ff8c00); font-weight: 500; margin-bottom: 8px;' }
+			});
+		}
+		
+		containerEl.createEl('div', {
+			text: 'Enables: Summarize, Enhanced transcripts',
+			cls: 'setting-item-description',
+			attr: { style: 'margin-bottom: 16px; font-style: italic;' }
 		});
 
 		// Primary AI Provider
-		containerEl.createEl('h4', { text: 'Primary AI Provider' });
+		containerEl.createEl('h4', { text: 'Choose Provider' });
 
 		// Current Provider setting
 		new Setting(containerEl)
 			.setName('AI Provider')
-			.setDesc('Choose your preferred AI provider for transcript processing')
+			.setDesc('')
 			.addDropdown(dropdown => dropdown
 				.addOptions({
 					'openai': 'OpenAI (GPT models)',
@@ -1291,26 +1233,18 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 				.onChange(async (value: ProviderType) => {
 					this.plugin.settings.currentProvider = value;
 					await this.plugin.saveSettings();
+					
+					// Preserve scroll position during refresh
+					const scrollTop = this.containerEl.scrollTop;
 					this.display(); // Refresh UI to show provider-specific settings
+					this.containerEl.scrollTop = scrollTop;
 				}));
 
-		// Provider status indicator
-		this.addProviderStatus(containerEl);
 
-		// Add note about switching providers
-		containerEl.createEl('div', {
-			cls: 'setting-item-description',
-			text: '💡 Tip: Switch between providers above to configure their API keys and models. Each provider has its own configuration section.'
-		});
 
 		// Provider-specific configuration sections
 		this.addProviderConfiguration(containerEl);
 
-		// Security notice
-		containerEl.createEl('div', {
-			cls: 'setting-item-description',
-			text: '🔒 All API keys are stored locally and only sent to their respective services for processing.'
-		});
 	}
 
 	/**
@@ -1328,23 +1262,61 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 			cls: 'setting-item-description'
 		});
 
-		// Alternative Transcription Services
-		advancedContainer.createEl('h4', { text: 'Alternative Transcription Services' });
+		// External Transcript Provider Override
+		advancedContainer.createEl('h4', { text: 'External Transcript Provider Override' });
 		
-		// AssemblyAI integration (placeholder for future enhancement)
 		new Setting(advancedContainer)
-			.setName('Transcription Service')
-			.setDesc('Choose the transcription service (YouTube is recommended for most use cases)')
-			.addDropdown(dropdown => dropdown
-				.addOptions({
-					'youtube': 'YouTube (Default)',
-					'assemblyai': 'AssemblyAI (Alternative)'
-				})
-				.setValue('youtube') // Default value
+			.setName('Use different provider for external transcripts')
+			.setDesc('Override the main AI provider for external transcript processing')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.externalTranscriptProvider !== this.plugin.settings.currentProvider)
 				.onChange(async (value) => {
-					// Future implementation
-					console.log('Transcription service changed to:', value);
+					if (value) {
+						// Keep current external provider or default to different one
+						if (this.plugin.settings.externalTranscriptProvider === this.plugin.settings.currentProvider) {
+							// Set to a different provider
+							const providers: ProviderType[] = ['openai', 'openrouter', 'ollama'];
+							const differentProvider = providers.find(p => p !== this.plugin.settings.currentProvider) || 'openai';
+							this.plugin.settings.externalTranscriptProvider = differentProvider;
+						}
+					} else {
+						// Use main provider
+						this.plugin.settings.externalTranscriptProvider = this.plugin.settings.currentProvider;
+					}
+					await this.plugin.saveSettings();
+					
+					// Preserve scroll position during refresh
+					const scrollTop = this.containerEl.scrollTop;
+					this.display(); // Refresh to show/hide provider settings
+					this.containerEl.scrollTop = scrollTop;
 				}));
+
+		// Show external transcript provider settings if override is enabled
+		if (this.plugin.settings.externalTranscriptProvider !== this.plugin.settings.currentProvider) {
+			new Setting(advancedContainer)
+				.setName('External Transcript AI Provider')
+				.setDesc('Choose a different AI provider for processing external transcripts')
+				.addDropdown(dropdown => dropdown
+					.addOptions({
+						'openai': 'OpenAI (GPT models)',
+						'openrouter': 'OpenRouter (Multiple models)',
+						'ollama': 'Ollama (Local models)'
+					})
+					.setValue(this.plugin.settings.externalTranscriptProvider || 'openai')
+					.onChange(async (value: ProviderType) => {
+						this.plugin.settings.externalTranscriptProvider = value;
+						await this.plugin.saveSettings();
+						
+						// Preserve scroll position during refresh
+						const scrollTop = this.containerEl.scrollTop;
+						this.display(); // Refresh to show provider-specific model options
+						this.containerEl.scrollTop = scrollTop;
+					}));
+
+			// External transcript model setting (dynamic based on provider)
+			this.addExternalTranscriptModelSetting(advancedContainer);
+		}
+
 
 		// Connection Testing
 		advancedContainer.createEl('h4', { text: 'Connection Testing' });
@@ -1369,6 +1341,213 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 						setTimeout(() => button.setButtonText('Run Tests'), 3000);
 					}
 				}));
+	}
+
+	/**
+	 * Add Basic Transcripts section
+	 */
+	private addBasicTranscriptsSection(containerEl: HTMLElement): void {
+		containerEl.createEl('h3', { text: 'Basic Transcripts' });
+
+		// Status and features
+		const hasYouTubeAPI = !!this.plugin.settings.youtubeApiKey;
+		
+		if (hasYouTubeAPI) {
+			containerEl.createEl('div', {
+				text: '✅ Ready',
+				cls: 'setting-item-description',
+				attr: { style: 'color: var(--text-success, #00b300); font-weight: 500; margin-bottom: 8px;' }
+			});
+		} else {
+			containerEl.createEl('div', {
+				text: '⚠️ Needs YouTube API',
+				cls: 'setting-item-description',
+				attr: { style: 'color: var(--text-warning, #ff8c00); font-weight: 500; margin-bottom: 8px;' }
+			});
+		}
+		
+		containerEl.createEl('div', {
+			text: 'Enables: Raw transcripts from YouTube',
+			cls: 'setting-item-description',
+			attr: { style: 'margin-bottom: 16px; font-style: italic;' }
+		});
+
+		// YouTube API Key setting
+		new Setting(containerEl)
+			.setName('YouTube Data API Key')
+			.setDesc('Enter your YouTube Data API v3 key')
+			.addText(text => text
+				.setPlaceholder('AIzaSy...')
+				.setValue(this.plugin.settings.youtubeApiKey)
+				.onChange(async (value) => {
+					this.plugin.settings.youtubeApiKey = value;
+					await this.plugin.saveSettings();
+					
+					// Preserve scroll position during refresh
+					const scrollTop = this.containerEl.scrollTop;
+					this.display(); // Refresh to show/hide dependent sections
+					this.containerEl.scrollTop = scrollTop;
+				}));
+	}
+
+
+	/**
+	 * Add Advanced Options section
+	 */
+	private addAdvancedOptionsSection(containerEl: HTMLElement): void {
+		// Create collapsible details element
+		const advancedDetails = containerEl.createEl('details');
+		advancedDetails.createEl('summary', { text: 'Advanced Options' });
+		
+		const advancedContainer = advancedDetails.createEl('div', { cls: 'advanced-settings-container' });
+		
+		advancedContainer.createEl('p', {
+			text: 'Expert configuration options for external transcript processing and connection testing.',
+			cls: 'setting-item-description'
+		});
+
+
+		// External Transcript Provider Override
+		advancedContainer.createEl('h4', { text: 'External Transcript Provider Override' });
+		
+		new Setting(advancedContainer)
+			.setName('Use different provider for external transcripts')
+			.setDesc('Override the main AI provider for external transcript processing')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.externalTranscriptProvider !== this.plugin.settings.currentProvider)
+				.onChange(async (value) => {
+					if (value) {
+						// Keep current external provider or default to different one
+						if (this.plugin.settings.externalTranscriptProvider === this.plugin.settings.currentProvider) {
+							// Set to a different provider
+							const providers: ProviderType[] = ['openai', 'openrouter', 'ollama'];
+							const differentProvider = providers.find(p => p !== this.plugin.settings.currentProvider) || 'openai';
+							this.plugin.settings.externalTranscriptProvider = differentProvider;
+						}
+					} else {
+						// Use main provider
+						this.plugin.settings.externalTranscriptProvider = this.plugin.settings.currentProvider;
+					}
+					await this.plugin.saveSettings();
+					
+					// Preserve scroll position during refresh
+					const scrollTop = this.containerEl.scrollTop;
+					this.display(); // Refresh to show/hide provider settings
+					this.containerEl.scrollTop = scrollTop;
+				}));
+
+		// Show external transcript provider settings if override is enabled
+		if (this.plugin.settings.externalTranscriptProvider !== this.plugin.settings.currentProvider) {
+			new Setting(advancedContainer)
+				.setName('External Transcript AI Provider')
+				.setDesc('Choose a different AI provider for processing external transcripts')
+				.addDropdown(dropdown => dropdown
+					.addOptions({
+						'openai': 'OpenAI (GPT models)',
+						'openrouter': 'OpenRouter (Multiple models)',
+						'ollama': 'Ollama (Local models)'
+					})
+					.setValue(this.plugin.settings.externalTranscriptProvider || 'openai')
+					.onChange(async (value: ProviderType) => {
+						this.plugin.settings.externalTranscriptProvider = value;
+						await this.plugin.saveSettings();
+						
+						// Preserve scroll position during refresh
+						const scrollTop = this.containerEl.scrollTop;
+						this.display(); // Refresh to show provider-specific model options
+						this.containerEl.scrollTop = scrollTop;
+					}));
+
+			// External transcript model setting (dynamic based on provider)
+			this.addExternalTranscriptModelSetting(advancedContainer);
+		}
+
+		// Connection Testing
+		advancedContainer.createEl('h4', { text: 'Connection Testing' });
+		
+		new Setting(advancedContainer)
+			.setName('Test All Connections')
+			.setDesc('Verify that all configured APIs are working correctly')
+			.addButton(button => button
+				.setButtonText('Run Tests')
+				.onClick(async () => {
+					// Future implementation - test all provider connections
+					button.setButtonText('Testing...');
+					try {
+						// Test YouTube API
+						// Test selected AI provider
+						// Test WebScraping API if configured
+						await new Promise(resolve => setTimeout(resolve, 1000)); // Placeholder
+						button.setButtonText('✅ All Tests Passed');
+						setTimeout(() => button.setButtonText('Run Tests'), 3000);
+					} catch (error) {
+						button.setButtonText('❌ Tests Failed');
+						setTimeout(() => button.setButtonText('Run Tests'), 3000);
+					}
+				}));
+	}
+
+	/**
+	 * Add experimental features section
+	 */
+	private addExperimentalFeaturesSection(containerEl: HTMLElement): void {
+		containerEl.createEl('h3', { text: 'Experimental Features' });
+		
+		// External transcript detection toggle
+		new Setting(containerEl)
+			.setName('External transcript detection')
+			.setDesc('Search for higher-quality transcripts in video descriptions')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.checkExternalTranscripts)
+				.onChange(async (value) => {
+					this.plugin.settings.checkExternalTranscripts = value;
+					await this.plugin.saveSettings();
+					
+					// Preserve scroll position during refresh
+					const scrollTop = this.containerEl.scrollTop;
+					this.display(); // Refresh to show/hide API inputs
+					this.containerEl.scrollTop = scrollTop;
+				})
+			);
+
+		// Show API inputs when external transcript detection is enabled
+		if (this.plugin.settings.checkExternalTranscripts) {
+			// YouTube API status indicator
+			const hasYouTubeAPI = !!this.plugin.settings.youtubeApiKey;
+			
+			if (hasYouTubeAPI) {
+				containerEl.createEl('div', {
+					cls: 'setting-item-description',
+					text: '✅ YouTube API configured in Basic Transcripts section',
+					attr: { style: 'color: var(--text-success, #00b300); margin-bottom: 8px;' }
+				});
+			} else {
+				containerEl.createEl('div', {
+					cls: 'setting-item-description',
+					text: '⚠️ Configure YouTube API in Basic Transcripts section above',
+					attr: { style: 'color: var(--text-warning, #ff8c00); margin-bottom: 8px;' }
+				});
+			}
+
+			// WebScraping.AI API Key
+			new Setting(containerEl)
+				.setName('WebScraping.AI API Key')
+				.setDesc('Enter your WebScraping.AI API key')
+				.addText(text => text
+					.setPlaceholder('your-webscraping-ai-key')
+					.setValue(this.plugin.settings.webscrapingApiKey)
+					.onChange(async (value) => {
+						this.plugin.settings.webscrapingApiKey = value;
+						await this.plugin.saveSettings();
+					}));
+
+			// Explanation of how it works
+			containerEl.createEl('div', {
+				cls: 'setting-item-description',
+				text: '💡 External transcript detection extracts URLs from video descriptions using YouTube Data API, then scrapes them for transcripts using WebScraping.AI.',
+				attr: { style: 'margin-top: 16px; padding: 12px; background: var(--background-secondary); border-radius: 8px; border-left: 4px solid var(--interactive-accent);' }
+			});
+		}
 	}
 
 }

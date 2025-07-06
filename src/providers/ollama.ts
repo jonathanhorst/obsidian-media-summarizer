@@ -11,7 +11,7 @@ export class OllamaProvider extends BaseLLMProvider {
       name: 'Ollama',
       baseUrl,
       apiKey: 'ollama', // Required by OpenAI client but unused
-      defaultModel: 'llama3.1:8b',
+      defaultModel: '',
       availableModels: [
         'llama3.1:8b',
         'llama3.1:70b',

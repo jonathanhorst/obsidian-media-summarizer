@@ -332,6 +332,7 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 			}
 
 			let finalTranscript: string;
+			let sourceLabel: string;
 
 			if (plugin.settings.enhancedTranscriptFormatting) {
 				// Enhanced formatting enabled - get transcript lines and metadata
@@ -360,8 +361,19 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 						new Notice(`${enhancedTranscript} Falling back to raw transcript.`);
 						// Fall back to raw transcript
 						finalTranscript = rawTranscript;
+						sourceLabel = '*YouTube auto-generated (AI enhancement failed)*';
 					} else {
 						finalTranscript = enhancedTranscript;
+						// Get current provider info for label
+						const currentProvider = plugin.settings.currentProvider;
+						const providerConfig = plugin.settings.providers[currentProvider];
+						let modelName = '';
+						if (currentProvider === 'ollama') {
+							modelName = (providerConfig as any).model || 'local model';
+						} else {
+							modelName = (providerConfig as any).model || 'default model';
+						}
+						sourceLabel = `*Enhanced with ${currentProvider} ${modelName}*`;
 					}
 				} catch (error) {
 					loadingNotice.hide();
@@ -369,16 +381,18 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 					console.error('Error getting transcript lines:', error);
 					// Fall back to raw transcript
 					finalTranscript = rawTranscript;
+					sourceLabel = '*YouTube auto-generated (AI enhancement failed)*';
 				}
 			} else {
 				// Enhanced formatting disabled - use raw transcript
 				finalTranscript = rawTranscript;
+				sourceLabel = '*YouTube auto-generated*';
 			}
 
 			loadingNotice.hide();
 
 			// Insert transcript under ## Transcript heading
-			const transcriptText = `\n\n## Enhanced Transcript\n\n${finalTranscript}\n`;
+			const transcriptText = `\n\n## Transcript\n\n${sourceLabel}\n\n${finalTranscript}\n`;
 			editor.replaceRange(transcriptText, editor.getCursor());
 
 			const enhancementStatus = plugin.settings.enhancedTranscriptFormatting ? 'Enhanced transcript' : 'Raw transcript';
@@ -443,8 +457,8 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 					// Format with timestamps every 5 segments
 					const formattedTranscript = formatRawTranscriptWithTimestamps(transcriptLines);
 					
-					// Insert formatted transcript under ## Raw Transcript heading
-					const transcriptText = `\n\n## Raw Transcript\n\n${formattedTranscript}\n`;
+					// Insert formatted transcript under ## Transcript heading
+					const transcriptText = `\n\n## Transcript\n\n*YouTube auto-generated with timestamps*\n\n${formattedTranscript}\n`;
 					editor.replaceRange(transcriptText, editor.getCursor());
 
 					new Notice('Raw transcript with timestamps inserted!');
@@ -468,8 +482,8 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 				return;
 			}
 
-			// Insert plain text transcript under ## Raw Transcript heading
-			const transcriptText = `\n\n## Raw Transcript\n\n${rawTranscript}\n`;
+			// Insert plain text transcript under ## Transcript heading
+			const transcriptText = `\n\n## Transcript\n\n*YouTube auto-generated*\n\n${rawTranscript}\n`;
 			editor.replaceRange(transcriptText, editor.getCursor());
 
 			new Notice('Raw transcript inserted!');
@@ -522,8 +536,9 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 			const lastLineLength = editor.getLine(lastLine).length;
 			editor.setCursor(lastLine, lastLineLength);
 
-			// Insert external transcript with source attribution showing full URL
-			const transcriptText = `\n\n## Transcript\n\n*Source: [${data.sourceUrl}](${data.sourceUrl})*\n\n${data.text}\n`;
+			// Insert external transcript with source attribution showing domain
+			const domain = new URL(data.sourceUrl).hostname;
+			const transcriptText = `\n\n## Transcript\n\n*From ${domain} - [view source](${data.sourceUrl})*\n\n${data.text}\n`;
 			editor.replaceRange(transcriptText, editor.getCursor());
 
 			// Scroll to show the transcript
@@ -633,49 +648,128 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 				onReady={handleReady}
 			/>
 			
-			{isReady && (
-				<div className="media-summarizer-controls">
-					<button 
-						className="media-summarizer-btn media-summarizer-timestamp-btn"
-						onClick={insertTimestamp}
-					>
-						🕒 Timestamp
-					</button>
-					<button 
-						className="media-summarizer-btn media-summarizer-summarize-btn"
-						onClick={generateSummary}
-					>
-						📝 Summarize
-					</button>
-					{plugin.settings.enhancedTranscriptFormatting && (
-						<button 
-							className="media-summarizer-btn media-summarizer-transcript-btn"
-							onClick={insertEnhancedTranscript}
-						>
-							📄 Enhanced Transcript
-						</button>
-					)}
-					<button 
-						className="media-summarizer-btn media-summarizer-raw-transcript-btn"
-						onClick={insertRawTranscript}
-					>
-						📄 Raw Transcript
-					</button>
-					{plugin.settings.checkExternalTranscripts && (
-						<button 
-							className="media-summarizer-btn media-summarizer-external-search-btn"
-							onClick={searchForExternalUrls}
-							disabled={!plugin.settings.openaiApiKey || !plugin.settings.webscrapingApiKey}
-							title={!plugin.settings.openaiApiKey || !plugin.settings.webscrapingApiKey ? 
-								'Configure API keys in settings to enable' : 
-								'Search video description for external transcript links'
-							}
-						>
-							🔍 Find External
-						</button>
-					)}
-				</div>
-			)}
+			{isReady && (() => {
+				// Check AI provider configuration
+				const currentProvider = plugin.settings.currentProvider;
+				let hasAIProvider = false;
+				
+				if (currentProvider) {
+					const providerConfig = plugin.settings.providers[currentProvider];
+					if (currentProvider === 'ollama') {
+						hasAIProvider = !!(providerConfig as any).baseUrl && !!(providerConfig as any).model;
+					} else {
+						hasAIProvider = !!(providerConfig as any).apiKey;
+					}
+				}
+
+				// Check external transcript capabilities
+				const hasExternalCapability = plugin.settings.youtubeApiKey && plugin.settings.webscrapingApiKey;
+
+				return (
+					<div className="media-summarizer-controls">
+						{/* Primary Actions */}
+						<div className="control-group">
+							<div className="control-group-header">Quick Actions</div>
+							<div className="control-group-buttons">
+								<button 
+									className="control-btn control-btn-primary"
+									onClick={insertTimestamp}
+									title="Insert current video timestamp at cursor position"
+									aria-label="Insert timestamp"
+								>
+									<span className="control-btn-icon">⏱️</span>
+									<span className="control-btn-text">Insert Timestamp</span>
+								</button>
+							</div>
+						</div>
+
+						{/* Smart Analysis */}
+						{hasAIProvider && (
+							<div className="control-group">
+								<div className="control-group-header">Smart Analysis</div>
+								<div className="control-group-buttons">
+									<button 
+										className="control-btn control-btn-ai"
+										onClick={generateSummary}
+										title={`Generate summary using ${currentProvider}`}
+										aria-label="Generate AI summary"
+									>
+										<span className="control-btn-icon">🤖</span>
+										<span className="control-btn-text">Summarize</span>
+									</button>
+								</div>
+							</div>
+						)}
+
+						{/* Transcripts */}
+						<div className="control-group">
+							<div className="control-group-header">Transcripts</div>
+							<div className="control-group-buttons">
+								{hasAIProvider && plugin.settings.enhancedTranscriptFormatting && (
+									<button 
+										className="control-btn control-btn-secondary"
+										onClick={insertEnhancedTranscript}
+										title={`Get AI-enhanced transcript using ${currentProvider}`}
+										aria-label="Insert enhanced transcript"
+									>
+										<span className="control-btn-icon">✨</span>
+										<span className="control-btn-text">Enhanced</span>
+									</button>
+								)}
+								<button 
+									className="control-btn control-btn-secondary"
+									onClick={insertRawTranscript}
+									title="Insert YouTube's auto-generated transcript"
+									aria-label="Insert raw transcript"
+								>
+									<span className="control-btn-icon">📄</span>
+									<span className="control-btn-text">Raw</span>
+								</button>
+								
+								{plugin.settings.checkExternalTranscripts && (
+									<button 
+										className={`control-btn ${hasExternalCapability ? 'control-btn-secondary' : 'control-btn-disabled'}`}
+										onClick={hasExternalCapability ? searchForExternalUrls : undefined}
+										disabled={!hasExternalCapability}
+										title={hasExternalCapability ? 
+											'Search video description for external transcript links' : 
+											'Configure YouTube API and WebScraping API keys in settings'
+										}
+										aria-label="Find external transcript"
+									>
+										<span className="control-btn-icon">🔍</span>
+										<span className="control-btn-text">Find External</span>
+									</button>
+								)}
+
+								{externalTranscriptData && (
+									<button 
+										className="control-btn control-btn-external"
+										onClick={insertExternalTranscript}
+										title={`Insert transcript from ${new URL(externalTranscriptData.sourceUrl).hostname}`}
+										aria-label="Insert external transcript"
+									>
+										<span className="control-btn-icon">🌐</span>
+										<span className="control-btn-text">External</span>
+									</button>
+								)}
+							</div>
+						</div>
+
+						{/* Configuration Hint */}
+						{!hasAIProvider && (
+							<div className="control-hint">
+								<span className="control-hint-icon">💡</span>
+								<span className="control-hint-text">
+									<a href="#" onClick={(e) => { e.preventDefault(); (plugin.app as any).setting?.open?.(); (plugin.app as any).setting?.openTabById?.('media-summarizer'); }}>
+										Configure AI provider
+									</a> for enhanced features
+								</span>
+							</div>
+						)}
+					</div>
+				);
+			})()}
 
 			{/* URL Selection Modal */}
 			{showUrlModal && foundUrls.length > 0 && (

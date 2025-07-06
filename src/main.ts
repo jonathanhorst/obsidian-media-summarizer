@@ -568,8 +568,6 @@ Note: Set these shortcuts in Obsidian's Hotkey settings.`;
 		// Create provider manager settings from plugin settings
 		const providerSettings: ProviderManagerSettings = {
 			currentProvider: this.settings.currentProvider,
-			enableFallback: this.settings.enableFallback,
-			fallbackProvider: this.settings.fallbackProvider,
 			openai: this.settings.providers.openai,
 			openrouter: this.settings.providers.openrouter,
 			ollama: this.settings.providers.ollama
@@ -610,17 +608,6 @@ Note: Set these shortcuts in Obsidian's Hotkey settings.`;
 		// Set default provider selection if not set
 		if (!this.settings.currentProvider) {
 			this.settings.currentProvider = 'openai';
-			needsSave = true;
-		}
-
-		// Set default fallback settings if not set
-		if (this.settings.enableFallback === undefined) {
-			this.settings.enableFallback = false;
-			needsSave = true;
-		}
-
-		if (!this.settings.fallbackProvider) {
-			this.settings.fallbackProvider = 'openrouter';
 			needsSave = true;
 		}
 

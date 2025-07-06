@@ -235,8 +235,6 @@ export class LLMSummarizer {
   }): ProviderManagerSettings {
     return {
       currentProvider: 'openai',
-      enableFallback: false,
-      fallbackProvider: 'openrouter',
       openai: {
         apiKey: legacySettings.openaiApiKey,
         model: legacySettings.aiModel
@@ -247,7 +245,7 @@ export class LLMSummarizer {
       },
       ollama: {
         baseUrl: 'http://localhost:11434',
-        model: 'llama3.1:8b'
+        model: ''
       }
     };
   }
@@ -259,8 +257,6 @@ export class LLMSummarizer {
     // Create a temporary provider manager with legacy settings
     const tempSettings: ProviderManagerSettings = {
       currentProvider: 'openai',
-      enableFallback: false,
-      fallbackProvider: 'openrouter',
       openai: {
         apiKey: apiKey,
         model: aiModel
@@ -271,7 +267,7 @@ export class LLMSummarizer {
       },
       ollama: {
         baseUrl: 'http://localhost:11434',
-        model: 'llama3.1:8b'
+        model: ''
       }
     };
 
@@ -294,8 +290,6 @@ export class LLMSummarizer {
 export async function summarize(transcript: string, apiKey: string, aiModel: string = 'gpt-4o-mini'): Promise<string> {
   const summarizer = new LLMSummarizer({
     currentProvider: 'openai',
-    enableFallback: false,
-    fallbackProvider: 'openrouter',
     openai: {
       apiKey: apiKey,
       model: aiModel
