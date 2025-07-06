@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is an Obsidian plugin called "Media Summarizer" that allows users to view YouTube videos in a custom pane while taking notes, with AI-powered transcript summarization using OpenAI's API.
+This is an Obsidian plugin called "Media Summarizer" that allows users to view YouTube videos in a custom pane while taking notes, with AI-powered transcript summarization using multiple AI providers (OpenAI, OpenRouter, Ollama).
 
 ## Development Commands
 
@@ -16,22 +16,29 @@ The plugin follows Obsidian's plugin architecture with these key components:
 
 ### Core Files
 - `src/main.ts` - Main plugin class extending Obsidian's Plugin, handles lifecycle, commands, and view management
-- `src/view.ts` - Custom ItemView for the YouTube video display and controls
-- `src/settings.ts` - Settings management and UI tab
-- `src/summarizer.ts` - YouTube transcript extraction and OpenAI summarization logic
+- `src/view.tsx` - Custom ItemView for the YouTube video display and controls (React-based)
+- `src/settings.ts` - Settings management and progressive disclosure UI
+- `src/summarizer.ts` - YouTube transcript extraction logic
+- `src/llm-summarizer.ts` - Multi-provider AI summarization logic
+- `src/providers/` - AI provider implementations (OpenAI, OpenRouter, Ollama)
+- `src/youtube-api-transcript.ts` - YouTube Data API integration
+- `src/timestamp-click-handler.ts` - Timestamp interaction handling
 
 ### Plugin Flow
 1. Plugin reads `media_url` from active note's frontmatter
 2. Extracts YouTube video ID and embeds video in custom view
-3. Fetches transcript using `youtube-transcript` library
-4. Uses OpenAI API to summarize transcript content
-5. View automatically refreshes when switching between notes or updating frontmatter
+3. Fetches transcript using `youtube-transcript` library or YouTube Data API
+4. Uses configured AI provider (OpenAI/OpenRouter/Ollama) to process transcripts
+5. Supports external transcript detection for higher-quality sources
+6. View automatically refreshes when switching between notes or updating frontmatter
 
 ### Key Integration Points
 - **Frontmatter Integration**: Plugin expects `media_url: [YouTube URL]` in note frontmatter
 - **Custom View**: Registers `MEDIA_SUMMARIZER_VIEW_TYPE` view in right sidebar by default
 - **Event Handling**: Listens for `active-leaf-change` and `vault.modify` events to refresh view
-- **API Integration**: Uses OpenAI GPT-3.5-turbo for transcript summarization
+- **Multi-Provider AI**: Supports OpenAI, OpenRouter, and Ollama with automatic model detection
+- **Progressive Settings**: "Value first" UI that provides immediate utility without API setup
+- **External Transcripts**: YouTube Data API + WebScraping.AI for enhanced transcript quality
 
 ### Build System
 - Uses esbuild for bundling with production/development modes
@@ -40,9 +47,11 @@ The plugin follows Obsidian's plugin architecture with these key components:
 - Supports inline sourcemaps in development mode
 
 ### Configuration Requirements
-- OpenAI API key must be configured in plugin settings
-- Plugin validates API key format (must start with 'sk-')
-- Uses `isConfigured()` method to check setup status
+- **AI Providers (optional)**: Choose from OpenAI, OpenRouter, or Ollama
+- **API Key Validation**: Automatic format validation for each provider
+- **Progressive Configuration**: Plugin provides immediate value without API setup
+- **External Transcripts (optional)**: YouTube Data API + WebScraping.AI keys
+- **Settings UI**: Progressive disclosure with "value first" organization
 
 ## Development Workflow
 

@@ -72,10 +72,19 @@ npm run build
 
 ```
 src/
-├── main.ts          # Main plugin class
-├── view.ts          # Custom ItemView with YouTube player
-├── settings.ts      # Settings management
-└── summarizer.ts    # Transcript fetching and AI integration
+├── main.ts                      # Main plugin class
+├── view.tsx                     # Custom ItemView with YouTube player (React)
+├── settings.ts                  # Progressive disclosure settings UI
+├── summarizer.ts                # YouTube transcript extraction
+├── llm-summarizer.ts           # Multi-provider AI integration
+├── youtube-api-transcript.ts   # YouTube Data API integration  
+├── timestamp-click-handler.ts  # Timestamp interaction handling
+└── providers/                  # AI provider implementations
+    ├── base.ts                 # Abstract base provider class
+    ├── provider-manager.ts     # Provider management and selection
+    ├── openai.ts              # OpenAI API integration
+    ├── openrouter.ts          # OpenRouter API integration
+    └── ollama.ts              # Ollama local AI integration
 ```
 
 ## Requirements

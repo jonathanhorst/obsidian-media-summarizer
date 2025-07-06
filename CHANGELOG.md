@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Enhanced Transcript Model Selector**: Complete model selection UI for Enhanced Transcript LLM Config section
+- **Provider-Specific Model Dropdowns**: OpenAI, OpenRouter, and Ollama model selection with refresh buttons
+
+### Fixed
+- **Settings UX Issues**: Multiple critical settings interface fixes
+  - Fixed hotkeys link to properly open Obsidian settings with navigation
+  - Corrected playback speed dropdown order using individual addOption calls
+  - Moved YouTube API key to experimental features section per wireframe specification
+- **Enhanced Transcript Configuration**: Added missing model selector for enhanced transcript provider selection
+
+### Changed
+- **Project Cleanup**: Removed completed development files and standalone testing environment
+- **Documentation Updates**: Updated all documentation to reflect current multi-provider architecture
+
 ## [0.1.0-beta] - 2025-01-04
 
 ### Added

@@ -55,18 +55,20 @@ The plugin uses a "value first" settings approach - start with basic features, t
 
 #### OpenAI
 1. Go to [OpenAI Platform](https://platform.openai.com/api-keys) to get your API key
-2. In plugin settings: AI Summarization → OpenAI Configuration
-3. Enter your API key (starts with `sk-`)
-4. Choose model:
+2. In plugin settings: Power Features → enable Summarization → Primary LLM Config
+3. Select "OpenAI" as LLM Provider
+4. Enter your API key (starts with `sk-`)
+5. Choose model:
    - **GPT-4o-mini**: Recommended - best balance of quality and cost
    - **GPT-4o**: Latest model with highest quality
    - **Custom**: Enter any model name for experimental releases
 
 #### OpenRouter  
 1. Go to [OpenRouter](https://openrouter.ai/keys) to get your API key
-2. In plugin settings: AI Summarization → OpenRouter Configuration
-3. Enter your API key (starts with `sk-or-v1-`)
-4. Choose from 100+ models:
+2. In plugin settings: Power Features → enable Summarization → Primary LLM Config
+3. Select "OpenRouter" as LLM Provider
+4. Enter your API key (starts with `sk-or-v1-`)
+5. Choose from 100+ models:
    - **Claude 3.5 Sonnet**: Recommended for transcript enhancement
    - **GPT-4o-mini**: Economical OpenAI option
    - **Llama models**: Open source options
@@ -75,9 +77,10 @@ The plugin uses a "value first" settings approach - start with basic features, t
 1. Install [Ollama](https://ollama.ai/) on your computer
 2. Download a model: `ollama pull llama3.1:8b`
 3. Start Ollama: `ollama serve`
-4. In plugin settings: AI Summarization → Ollama Configuration
-5. Plugin will auto-detect your installed models
-6. Popular models: `llama3.1:8b`, `mistral:7b`, `codellama:7b`
+4. In plugin settings: Power Features → enable Summarization → Primary LLM Config
+5. Select "Ollama" as LLM Provider
+6. Plugin will auto-detect your installed models
+7. Popular models: `llama3.1:8b`, `mistral:7b`, `codellama:7b`
 
 ### Optional Enhancements
 
@@ -86,13 +89,13 @@ The plugin uses a "value first" settings approach - start with basic features, t
 - Go to [Google Cloud Console](https://console.cloud.google.com/)
 - Enable YouTube Data API v3
 - Create an API key
-- Enter in plugin settings: Transcript Quality → YouTube Data API Key
+- Enter in plugin settings: Experimental Features → enable External transcript detection → YouTube Data API Key
 - **Enables**: Basic transcripts, external transcript detection, video metadata
 
 #### External Transcript Detection
 **WebScraping.AI API Key:**
 - Get your key from [WebScraping.AI](https://webscraping.ai/)
-- Enter in plugin settings: Transcript Quality → WebScraping.AI API Key
+- Enter in plugin settings: Experimental Features → enable External transcript detection → WebScraping.AI API Key
 - **Benefits**: Higher-quality transcripts, lower AI processing costs
 - **How it works**: Searches video descriptions for transcript links
 
@@ -158,7 +161,7 @@ When you click the timestamp button or use the keyboard shortcut:
 
 ### Enhanced Transcript Formatting
 
-**Enable in settings:** Playback & Interaction → Enhanced transcript formatting
+**Enable in settings:** Power Features → Enhanced transcript
 
 **Improvements:**
 - Better punctuation and capitalization
@@ -191,10 +194,11 @@ When you click the timestamp button or use the keyboard shortcut:
 
 ### Multi-Provider AI Setup
 
-**Provider Override for External Transcripts:**
-- Advanced Settings → External Transcript Provider Override
-- Use different AI provider for external transcript processing
-- Useful for cost optimization or quality preferences
+**Enhanced Transcript LLM Config:**
+- Enable in Power Features → Enhanced transcript → Enhanced Transcript LLM Config
+- Use different AI provider specifically for enhanced transcript processing  
+- Toggle "Unique enhanced transcript LLM" to enable separate provider selection
+- Choose different provider and model for cost optimization or quality preferences
 
 ### Custom AI Models
 
