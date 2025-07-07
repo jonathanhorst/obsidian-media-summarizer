@@ -1,5 +1,5 @@
 import { Setting } from 'obsidian';
-import { MediaSummarizerSettings } from '../main';
+import { MediaSummarizerSettings } from '../settings';
 import { PROVIDER_CONSTANTS, ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants';
 import { ErrorHandlingService } from './error-handling-service';
 
@@ -82,7 +82,9 @@ export abstract class ProviderSettingsRenderer {
             .setName('Model')
             .setDesc('Select the AI model to use');
         
+        let dropdownComponent: any;
         const modelDropdown = setting.addDropdown(dropdown => {
+            dropdownComponent = dropdown;
             // Add loading state
             dropdown.addOption('loading', 'Loading models...');
             dropdown.setValue('loading');
@@ -105,12 +107,12 @@ export abstract class ProviderSettingsRenderer {
                 .setButtonText('Refresh')
                 .setTooltip('Refresh available models')
                 .onClick(async () => {
-                    await this.refreshModels(modelDropdown.dropdownEl, modelContainer);
+                    await this.refreshModels(dropdownComponent.selectEl, modelContainer);
                 });
         });
         
         // Initial model load
-        this.refreshModels(modelDropdown.dropdownEl, modelContainer);
+        this.refreshModels(dropdownComponent.selectEl, modelContainer);
     }
     
     /**

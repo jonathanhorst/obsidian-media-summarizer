@@ -1,237 +1,376 @@
-import { Plugin, WorkspaceLeaf, Notice, MarkdownView } from 'obsidian';
+import { Plugin, WorkspaceLeaf, MarkdownView } from 'obsidian';
 import { MediaSummarizerView, MEDIA_SUMMARIZER_VIEW_TYPE } from './view';
 import { MediaSummarizerSettingTab, MediaSummarizerSettings, DEFAULT_SETTINGS } from './settings';
 import { createTimestampClickHandlerPlugin, convertTimestampToSeconds } from './timestamp-click-handler';
 import { LLMSummarizer } from './llm-summarizer';
 import { ProviderManagerSettings } from './providers/provider-manager';
+import { 
+    YouTubePlayerService, 
+    ErrorHandlingService,
+    AppError 
+} from './services';
+import { 
+    SETTINGS_CONSTANTS, 
+    UI_CONSTANTS, 
+    ERROR_MESSAGES, 
+    SUCCESS_MESSAGES,
+    PROVIDER_CONSTANTS
+} from './constants';
 
 /**
  * Main plugin class for Media Summarizer
  * Handles plugin lifecycle, settings management, and view registration
  */
 export default class MediaSummarizerPlugin extends Plugin {
-	settings: MediaSummarizerSettings;
-	private lastActiveFilePath: string | null = null;
-	private llmSummarizer: LLMSummarizer;
+    settings: MediaSummarizerSettings;
+    private lastActiveFilePath: string | null = null;
+    private llmSummarizer: LLMSummarizer;
+    private youtubePlayerService: YouTubePlayerService;
+    private errorHandler: ErrorHandlingService;
 
-	/**
-	 * Handle timestamp clicks - jump to specific time in video
-	 */
-	handleTimestampClick = (timestamp: string): boolean | undefined => {
-		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-		if (!activeView) return;
+    /**
+     * Handle timestamp clicks - jump to specific time in video
+     */
+    handleTimestampClick = (timestamp: string): boolean | undefined => {
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        if (!activeView) return;
 
-		// Get the Media Summarizer view that contains the video player
-		const leaves = this.app.workspace.getLeavesOfType(MEDIA_SUMMARIZER_VIEW_TYPE);
-		if (leaves.length === 0) return;
+        try {
+            const seconds = convertTimestampToSeconds(timestamp);
+            this.youtubePlayerService.seekTo(seconds);
+            return true;
+        } catch (error) {
+            this.errorHandler.handleApiError(error, {
+                operation: 'timestamp_click',
+                details: { timestamp }
+            });
+            return false;
+        }
+    };
 
-		const mediaSummarizerView = leaves[0].view as MediaSummarizerView;
-		if (!mediaSummarizerView) return;
+    /**
+     * Plugin initialization
+     */
+    async onload(): Promise<void> {
+        await this.initializeServices();
+        await this.loadSettings();
+        await this.setupPlugin();
+    }
 
-		// Get the YouTube player reference from the view
-		const ytRef = mediaSummarizerView.getYouTubePlayerRef();
-		if (!ytRef || !ytRef.current) return;
+    /**
+     * Plugin cleanup
+     */
+    onunload(): void {
+        // Cleanup is handled automatically by Obsidian for registered views and events
+    }
 
-		// Convert timestamp to seconds and seek to that position
-		const seconds = convertTimestampToSeconds(timestamp);
-		ytRef.current.getInternalPlayer()?.seekTo(seconds, true);
+    /**
+     * Initialize all services
+     */
+    private async initializeServices(): Promise<void> {
+        this.youtubePlayerService = YouTubePlayerService.getInstance(this.app);
+        this.errorHandler = ErrorHandlingService.getInstance();
+    }
 
-		return true;
-	};
+    /**
+     * Setup plugin components
+     */
+    private async setupPlugin(): Promise<void> {
+        this.registerEditorExtension([
+            createTimestampClickHandlerPlugin(this.handleTimestampClick),
+        ]);
 
-	/**
-	 * Plugin initialization
-	 */
-	async onload(): Promise<void> {
+        this.initializeLLMSummarizer();
+        this.registerCustomView();
+        this.setupUI();
+        this.registerCommands();
+        this.registerEventHandlers();
+    }
 
-		// Register CodeMirror extension for timestamp clicks
-		this.registerEditorExtension([
-			createTimestampClickHandlerPlugin(this.handleTimestampClick),
-		]);
+    /**
+     * Register the custom view
+     */
+    private registerCustomView(): void {
+        this.registerView(
+            MEDIA_SUMMARIZER_VIEW_TYPE,
+            (leaf) => new MediaSummarizerView(leaf, this)
+        );
+    }
 
-		// Load settings
-		await this.loadSettings();
+    /**
+     * Setup UI elements
+     */
+    private setupUI(): void {
+        this.addSettingTab(new MediaSummarizerSettingTab(this.app, this));
 
-		// Initialize LLM summarizer with current settings
-		this.initializeLLMSummarizer();
+        this.addRibbonIcon('play', 'Open Media Summarizer', () => {
+            this.activateView();
+        });
+    }
 
-		// Register the custom view
-		this.registerView(
-			MEDIA_SUMMARIZER_VIEW_TYPE,
-			(leaf) => new MediaSummarizerView(leaf, this)
-		);
+    /**
+     * Register all plugin commands
+     */
+    private registerCommands(): void {
+        this.registerBasicCommands();
+        this.registerVideoControlCommands();
+    }
 
-		// Add settings tab
-		this.addSettingTab(new MediaSummarizerSettingTab(this.app, this));
+    /**
+     * Register basic plugin commands
+     */
+    private registerBasicCommands(): void {
+        this.addCommand({
+            id: 'open-media-summarizer',
+            name: 'Open Media Summarizer',
+            callback: () => this.activateView()
+        });
 
-		// Add ribbon icon to activate the view
-		this.addRibbonIcon('play', 'Open Media Summarizer', () => {
-			this.activateView();
-		});
+        this.addCommand({
+            id: 'refresh-media-summarizer',
+            name: 'Refresh Media Summarizer',
+            callback: () => this.refreshView()
+        });
 
-		// Add command to open the view
-		this.addCommand({
-			id: 'open-media-summarizer',
-			name: 'Open Media Summarizer',
-			callback: () => {
-				this.activateView();
-			}
-		});
+        this.addCommand({
+            id: 'show-shortcuts-help',
+            name: 'Show Keyboard Shortcuts',
+            editorCallback: () => this.showShortcutsHelp()
+        });
+    }
 
-		// Add command to refresh the view (useful when switching between notes)
-		this.addCommand({
-			id: 'refresh-media-summarizer',
-			name: 'Refresh Media Summarizer',
-			callback: () => {
-				this.refreshView();
-			}
-		});
+    /**
+     * Register video control commands for keyboard shortcuts
+     */
+    private registerVideoControlCommands(): void {
+        const commands = [
+            {
+                id: 'insert-timestamp',
+                name: 'Insert Timestamp',
+                callback: this.insertTimestampCommand.bind(this)
+            },
+            {
+                id: 'toggle-play-pause',
+                name: 'Play/Pause',
+                callback: this.togglePlayPauseCommand.bind(this)
+            },
+            {
+                id: 'seek-forward',
+                name: 'Fast Forward',
+                callback: this.seekForwardCommand.bind(this)
+            },
+            {
+                id: 'seek-backward',
+                name: 'Rewind',
+                callback: this.seekBackwardCommand.bind(this)
+            },
+            {
+                id: 'speed-up',
+                name: 'Speed Up',
+                callback: this.speedUpCommand.bind(this)
+            },
+            {
+                id: 'speed-down',
+                name: 'Speed Down',
+                callback: this.speedDownCommand.bind(this)
+            },
+            {
+                id: 'toggle-mute',
+                name: 'Mute/Unmute',
+                callback: this.toggleMuteCommand.bind(this)
+            }
+        ];
 
-		// Keyboard Shortcut Commands for Video Control
-		this.addVideoControlCommands();
+        commands.forEach(cmd => {
+            this.addCommand({
+                id: cmd.id,
+                name: cmd.name,
+                editorCallback: async (editor, view) => {
+                    await cmd.callback(editor, view);
+                }
+            });
+        });
+    }
 
-		// Listen for active file changes to refresh the view
-		// Only refresh when switching to a different file, not just changing focus
-		this.registerEvent(
-			this.app.workspace.on('active-leaf-change', () => {
-				// Small delay to ensure the new file is fully loaded
-				setTimeout(() => {
-					// Only refresh if the active file has actually changed
-					const currentActiveFile = this.app.workspace.getActiveFile();
-					if (currentActiveFile && this.lastActiveFilePath !== currentActiveFile.path) {
-						this.lastActiveFilePath = currentActiveFile.path;
-						this.refreshView();
-					}
-				}, 100);
-			})
-		);
+    /**
+     * Register event handlers
+     */
+    private registerEventHandlers(): void {
+        this.registerEvent(
+            this.app.workspace.on('active-leaf-change', () => {
+                setTimeout(() => {
+                    this.handleActiveFileChange();
+                }, SETTINGS_CONSTANTS.SETTINGS_OPEN_DELAY);
+            })
+        );
 
-		// Listen for file changes to refresh the view when frontmatter is updated
-		this.registerEvent(
-			this.app.vault.on('modify', (file) => {
-				// Only refresh if the modified file is the currently active file
-				const activeFile = this.app.workspace.getActiveFile();
-				if (activeFile && file.path === activeFile.path) {
-					setTimeout(() => {
-						this.refreshView();
-					}, 100);
-				}
-			})
-		);
-	}
+        this.registerEvent(
+            this.app.vault.on('modify', (file) => {
+                this.handleFileModification(file);
+            })
+        );
+    }
 
-	/**
-	 * Plugin cleanup
-	 */
-	onunload(): void {
-		// Cleanup is handled automatically by Obsidian for registered views and events
-	}
+    /**
+     * Handle active file changes
+     */
+    private handleActiveFileChange(): void {
+        const currentActiveFile = this.app.workspace.getActiveFile();
+        if (currentActiveFile && this.lastActiveFilePath !== currentActiveFile.path) {
+            this.lastActiveFilePath = currentActiveFile.path;
+            this.refreshView();
+        }
+    }
 
-	/**
-	 * Add all video control commands for keyboard shortcuts
-	 */
-	private addVideoControlCommands(): void {
-		// 1. Insert Timestamp (⌃I)
-		this.addCommand({
-			id: 'insert-timestamp',
-			name: 'Insert Timestamp',
-			editorCallback: async (editor, view) => {
-				await this.insertTimestampCommand(editor, view);
-			}
-		});
+    /**
+     * Handle file modifications
+     */
+    private handleFileModification(file: any): void {
+        const activeFile = this.app.workspace.getActiveFile();
+        if (activeFile && file.path === activeFile.path) {
+            setTimeout(() => {
+                this.refreshView();
+            }, SETTINGS_CONSTANTS.SETTINGS_OPEN_DELAY);
+        }
+    }
 
-		// 2. Play/Pause (⌃K)
-		this.addCommand({
-			id: 'toggle-play-pause',
-			name: 'Play/Pause',
-			editorCallback: async (editor, view) => {
-				await this.togglePlayPauseCommand();
-			}
-		});
+    /**
+     * Command implementations using the new services
+     */
+    private async insertTimestampCommand(editor: any, view: any): Promise<void> {
+        try {
+            const result = await this.youtubePlayerService.insertTimestamp({
+                timestampOffset: this.settings.timestampOffsetSeconds,
+                playbackOffset: this.settings.playbackOffsetSeconds,
+                pauseOnInsert: this.settings.pauseOnTimestampInsert
+            });
 
-		// 3. Fast Forward (⌃L)
-		this.addCommand({
-			id: 'seek-forward',
-			name: 'Fast Forward',
-			editorCallback: async (editor, view) => {
-				await this.seekForwardCommand();
-			}
-		});
+            if (result.success && result.timestamp) {
+                editor.replaceSelection(`${result.timestamp} `);
+                this.errorHandler.showSuccess(`Timestamp inserted: ${result.timestamp}`);
+            } else {
+                throw new Error(result.error || ERROR_MESSAGES.TIMESTAMP_INSERT_FAILED);
+            }
+        } catch (error) {
+            await this.errorHandler.handleApiError(error, {
+                operation: 'insert_timestamp'
+            });
+        }
+    }
 
-		// 4. Rewind (⌃J)
-		this.addCommand({
-			id: 'seek-backward',
-			name: 'Rewind',
-			editorCallback: async (editor, view) => {
-				await this.seekBackwardCommand();
-			}
-		});
+    private async togglePlayPauseCommand(): Promise<void> {
+        try {
+            const success = await this.youtubePlayerService.playPause();
+            if (!success) {
+                throw new Error(ERROR_MESSAGES.PLAYBACK_CONTROL_FAILED);
+            }
+            // Success feedback is handled by the service
+        } catch (error) {
+            await this.errorHandler.handleApiError(error, {
+                operation: 'toggle_play_pause'
+            });
+        }
+    }
 
-		// 5. Speed Up (Shift + >)
-		this.addCommand({
-			id: 'speed-up',
-			name: 'Speed Up',
-			editorCallback: async (editor, view) => {
-				await this.speedUpCommand();
-			}
-		});
+    private async seekForwardCommand(): Promise<void> {
+        try {
+            const success = await this.youtubePlayerService.skip(this.settings.seekSeconds);
+            if (success) {
+                this.errorHandler.showSuccess(`Jumped forward ${this.settings.seekSeconds}s`);
+            } else {
+                throw new Error(ERROR_MESSAGES.PLAYBACK_CONTROL_FAILED);
+            }
+        } catch (error) {
+            await this.errorHandler.handleApiError(error, {
+                operation: 'seek_forward'
+            });
+        }
+    }
 
-		// 6. Speed Down (Shift + <)
-		this.addCommand({
-			id: 'speed-down',
-			name: 'Speed Down',
-			editorCallback: async (editor, view) => {
-				await this.speedDownCommand();
-			}
-		});
+    private async seekBackwardCommand(): Promise<void> {
+        try {
+            const success = await this.youtubePlayerService.skip(-this.settings.seekSeconds);
+            if (success) {
+                this.errorHandler.showSuccess(`Jumped backward ${this.settings.seekSeconds}s`);
+            } else {
+                throw new Error(ERROR_MESSAGES.PLAYBACK_CONTROL_FAILED);
+            }
+        } catch (error) {
+            await this.errorHandler.handleApiError(error, {
+                operation: 'seek_backward'
+            });
+        }
+    }
 
-		// 7. Mute/Unmute (M)
-		this.addCommand({
-			id: 'toggle-mute',
-			name: 'Mute/Unmute',
-			editorCallback: async (editor, view) => {
-				await this.toggleMuteCommand();
-			}
-		});
+    private async speedUpCommand(): Promise<void> {
+        try {
+            const playerState = await this.youtubePlayerService.getPlayerState();
+            if (!playerState) {
+                throw new Error(ERROR_MESSAGES.PLAYER_NOT_READY);
+            }
 
-		// 8. Show Help (?)
-		this.addCommand({
-			id: 'show-shortcuts-help',
-			name: 'Show Keyboard Shortcuts',
-			editorCallback: async (editor, view) => {
-				this.showShortcutsHelp();
-			}
-		});
-	}
+            const speeds = SETTINGS_CONSTANTS.PLAYBACK_SPEED_OPTIONS;
+            const currentIndex = speeds.indexOf(playerState.playbackRate as any);
+            const nextIndex = Math.min(currentIndex + 1, speeds.length - 1);
+            const nextSpeed = speeds[nextIndex];
 
-	/**
-	 * Get the active YouTube player from MediaSummarizerView
-	 */
-	private getActiveYouTubePlayer() {
-		const leaves = this.app.workspace.getLeavesOfType(MEDIA_SUMMARIZER_VIEW_TYPE);
-		if (leaves.length === 0) return null;
+            const success = await this.youtubePlayerService.setPlaybackSpeed(nextSpeed as any);
+            if (success) {
+                this.errorHandler.showSuccess(`Speed: ${nextSpeed}x`);
+            } else {
+                throw new Error(ERROR_MESSAGES.PLAYBACK_CONTROL_FAILED);
+            }
+        } catch (error) {
+            await this.errorHandler.handleApiError(error, {
+                operation: 'speed_up'
+            });
+        }
+    }
 
-		const mediaSummarizerView = leaves[0].view as MediaSummarizerView;
-		if (!mediaSummarizerView) return null;
+    private async speedDownCommand(): Promise<void> {
+        try {
+            const playerState = await this.youtubePlayerService.getPlayerState();
+            if (!playerState) {
+                throw new Error(ERROR_MESSAGES.PLAYER_NOT_READY);
+            }
 
-		const ytRef = mediaSummarizerView.getYouTubePlayerRef();
-		if (!ytRef || !ytRef.current) return null;
+            const speeds = SETTINGS_CONSTANTS.PLAYBACK_SPEED_OPTIONS;
+            const currentIndex = speeds.indexOf(playerState.playbackRate as any);
+            const nextIndex = Math.max(currentIndex - 1, 0);
+            const nextSpeed = speeds[nextIndex];
 
-		return ytRef.current;
-	}
+            const success = await this.youtubePlayerService.setPlaybackSpeed(nextSpeed as any);
+            if (success) {
+                this.errorHandler.showSuccess(`Speed: ${nextSpeed}x`);
+            } else {
+                throw new Error(ERROR_MESSAGES.PLAYBACK_CONTROL_FAILED);
+            }
+        } catch (error) {
+            await this.errorHandler.handleApiError(error, {
+                operation: 'speed_down'
+            });
+        }
+    }
 
-	/**
-	 * Show visual feedback notification
-	 */
-	private showFeedback(message: string): void {
-		new Notice(message, 2000);
-	}
+    private async toggleMuteCommand(): Promise<void> {
+        try {
+            const success = await this.youtubePlayerService.toggleMute();
+            if (!success) {
+                throw new Error(ERROR_MESSAGES.PLAYBACK_CONTROL_FAILED);
+            }
+            // Success feedback is handled by the service
+        } catch (error) {
+            await this.errorHandler.handleApiError(error, {
+                operation: 'toggle_mute'
+            });
+        }
+    }
 
-	/**
-	 * Show keyboard shortcuts help overlay
-	 */
-	private showShortcutsHelp(): void {
-		const helpText = `Media Summarizer Keyboard Shortcuts:
+    /**
+     * Show keyboard shortcuts help overlay
+     */
+    private showShortcutsHelp(): void {
+        const helpText = `Media Summarizer Keyboard Shortcuts:
 
 ⌃I - Insert Timestamp
 ⌃K - Play/Pause
@@ -244,463 +383,289 @@ M - Mute/Unmute
 Settings: Configure seek distance and timestamp behavior in plugin settings.
 Note: Set these shortcuts in Obsidian's Hotkey settings.`;
 
-		new Notice(helpText, 8000);
-	}
+        this.errorHandler.showInfo(helpText, SETTINGS_CONSTANTS.HELP_NOTICE_DURATION);
+    }
 
-	/**
-	 * Command implementations
-	 */
-	private async insertTimestampCommand(editor: any, view: any): Promise<void> {
-		const player = this.getActiveYouTubePlayer();
-		if (!player) {
-			this.showFeedback('No video player found. Open a media note first.');
-			return;
-		}
+    /**
+     * Activate the Media Summarizer view
+     */
+    async activateView(): Promise<void> {
+        try {
+            const { workspace } = this.app;
+            let leaf: WorkspaceLeaf | null = null;
+            const leaves = workspace.getLeavesOfType(MEDIA_SUMMARIZER_VIEW_TYPE);
 
-		try {
-			const timestamp = await player.internalPlayer?.getCurrentTime();
-			if (!timestamp) {
-				this.showFeedback('Could not get current video time');
-				return;
-			}
+            if (leaves.length > 0) {
+                leaf = leaves[0];
+            } else {
+                leaf = workspace.getRightLeaf(false);
+                await leaf.setViewState({
+                    type: MEDIA_SUMMARIZER_VIEW_TYPE,
+                    active: true,
+                });
+            }
 
-			const offsetTimestamp = Math.max(0, timestamp - this.settings.timestampOffsetSeconds);
-			const formattedTimestamp = this.formatTimestamp(offsetTimestamp);
-			
-			editor.replaceSelection(`[${formattedTimestamp}]() `);
-			
-			// Rewind video playback by playbackOffsetSeconds
-			if (this.settings.playbackOffsetSeconds > 0) {
-				const newPlaybackTime = Math.max(0, timestamp - this.settings.playbackOffsetSeconds);
-				await player.getInternalPlayer()?.seekTo(newPlaybackTime, true);
-			}
-			
-			if (this.settings.pauseOnTimestampInsert) {
-				await player.getInternalPlayer()?.pauseVideo();
-			}
+            workspace.revealLeaf(leaf);
+            await this.validateActiveNote();
+        } catch (error) {
+            await this.errorHandler.handleApiError(error, {
+                operation: 'activate_view'
+            });
+        }
+    }
 
-			this.showFeedback(`Timestamp inserted: ${formattedTimestamp}`);
-		} catch (error) {
-			console.error('Error inserting timestamp:', error);
-			this.showFeedback('Error inserting timestamp');
-		}
-	}
+    /**
+     * Validate active note has media_url
+     */
+    private async validateActiveNote(): Promise<void> {
+        const activeFile = this.app.workspace.getActiveFile();
+        if (!activeFile) {
+            this.errorHandler.showInfo('Please open a note with a media_url in the frontmatter to load a video');
+            return;
+        }
 
-	private async togglePlayPauseCommand(): Promise<void> {
-		const player = this.getActiveYouTubePlayer();
-		if (!player) {
-			this.showFeedback('No video player found');
-			return;
-		}
+        try {
+            const content = await this.app.vault.read(activeFile);
+            const frontmatterMatch = content.match(UI_CONSTANTS.FRONTMATTER_REGEX);
 
-		try {
-			const playerState = await player.internalPlayer?.getPlayerState();
-			if (playerState === 1) { // Playing
-				await player.getInternalPlayer()?.pauseVideo();
-				this.showFeedback('Video paused');
-			} else {
-				await player.getInternalPlayer()?.playVideo();
-				this.showFeedback('Video playing');
-			}
-		} catch (error) {
-			console.error('Error toggling play/pause:', error);
-			this.showFeedback('Error controlling playback');
-		}
-	}
+            if (frontmatterMatch) {
+                const frontmatter = frontmatterMatch[1];
+                const mediaUrlMatch = frontmatter.match(UI_CONSTANTS.MEDIA_URL_REGEX);
+                
+                if (mediaUrlMatch) {
+                    this.errorHandler.showSuccess('Media Summarizer opened - loading video from frontmatter');
+                } else {
+                    this.errorHandler.showInfo('Add "media_url: [YouTube URL]" to your note\'s frontmatter to load a video');
+                }
+            } else {
+                this.errorHandler.showInfo('Add frontmatter with "media_url: [YouTube URL]" to load a video');
+            }
+        } catch (error) {
+            console.error('Error checking frontmatter:', error);
+        }
+    }
 
-	private async seekForwardCommand(): Promise<void> {
-		const player = this.getActiveYouTubePlayer();
-		if (!player) {
-			this.showFeedback('No video player found');
-			return;
-		}
+    /**
+     * Refresh the Media Summarizer view
+     */
+    async refreshView(): Promise<void> {
+        const leaves = this.app.workspace.getLeavesOfType(MEDIA_SUMMARIZER_VIEW_TYPE);
+        
+        for (const leaf of leaves) {
+            const view = leaf.view as MediaSummarizerView;
+            if (view && typeof view.refresh === 'function') {
+                await view.refresh();
+            }
+        }
+    }
 
-		try {
-			const currentTime = await player.internalPlayer?.getCurrentTime();
-			if (currentTime !== undefined) {
-				const newTime = currentTime + this.settings.seekSeconds;
-				await player.getInternalPlayer()?.seekTo(newTime, true);
-				this.showFeedback(`Jumped forward ${this.settings.seekSeconds}s`);
-			}
-		} catch (error) {
-			console.error('Error seeking forward:', error);
-			this.showFeedback('Error seeking forward');
-		}
-	}
+    /**
+     * Load plugin settings from storage
+     */
+    async loadSettings(): Promise<void> {
+        this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    }
 
-	private async seekBackwardCommand(): Promise<void> {
-		const player = this.getActiveYouTubePlayer();
-		if (!player) {
-			this.showFeedback('No video player found');
-			return;
-		}
+    /**
+     * Save plugin settings to storage
+     */
+    async saveSettings(): Promise<void> {
+        await this.saveData(this.settings);
+        this.initializeLLMSummarizer();
+        this.refreshAllMediaSummarizerViews();
+        this.errorHandler.showSuccess(SUCCESS_MESSAGES.SETTINGS_SAVED);
+    }
 
-		try {
-			const currentTime = await player.internalPlayer?.getCurrentTime();
-			if (currentTime !== undefined) {
-				const newTime = Math.max(0, currentTime - this.settings.seekSeconds);
-				await player.getInternalPlayer()?.seekTo(newTime, true);
-				this.showFeedback(`Jumped backward ${this.settings.seekSeconds}s`);
-			}
-		} catch (error) {
-			console.error('Error seeking backward:', error);
-			this.showFeedback('Error seeking backward');
-		}
-	}
+    /**
+     * Refresh all Media Summarizer views to reflect settings changes
+     */
+    private refreshAllMediaSummarizerViews(): void {
+        const leaves = this.app.workspace.getLeavesOfType(MEDIA_SUMMARIZER_VIEW_TYPE);
+        leaves.forEach(leaf => {
+            const view = leaf.view as MediaSummarizerView;
+            if (view && typeof view.refreshView === 'function') {
+                view.refreshView().catch(error => {
+                    this.errorHandler.handleApiError(error, {
+                        operation: 'refresh_view'
+                    });
+                });
+            }
+        });
+    }
 
-	private async speedUpCommand(): Promise<void> {
-		const player = this.getActiveYouTubePlayer();
-		if (!player) {
-			this.showFeedback('No video player found');
-			return;
-		}
+    /**
+     * Initialize or update the LLM summarizer with current settings
+     */
+    private initializeLLMSummarizer(): void {
+        this.migrateLegacySettings();
+        
+        const providerSettings: ProviderManagerSettings = {
+            currentProvider: this.settings.currentProvider,
+            openai: this.settings.providers.openai,
+            openrouter: this.settings.providers.openrouter,
+            ollama: this.settings.providers.ollama
+        };
 
-		try {
-			const internalPlayer = player.getInternalPlayer();
-			if (!internalPlayer) return;
+        if (this.llmSummarizer) {
+            this.llmSummarizer.updateSettings(providerSettings);
+        } else {
+            this.llmSummarizer = new LLMSummarizer(providerSettings);
+        }
+    }
 
-			const playbackRates = await internalPlayer.getAvailablePlaybackRates();
-			const currentRate = await internalPlayer.getPlaybackRate();
-			const currentIndex = playbackRates.indexOf(currentRate);
-			const nextIndex = Math.min(currentIndex + 1, playbackRates.length - 1);
-			const nextRate = playbackRates[nextIndex];
+    /**
+     * Migrate legacy settings to new provider-based structure
+     */
+    private migrateLegacySettings(): void {
+        let needsSave = false;
 
-			await internalPlayer.setPlaybackRate(nextRate);
-			this.showFeedback(`Speed: ${nextRate}x`);
-		} catch (error) {
-			console.error('Error changing speed:', error);
-			this.showFeedback('Error changing speed');
-		}
-	}
+        // Initialize providers object if needed
+        if (!this.settings.providers) {
+            this.settings.providers = {
+                openai: { apiKey: '', model: PROVIDER_CONSTANTS.DEFAULT_OPENAI_MODEL },
+                openrouter: { apiKey: '', model: PROVIDER_CONSTANTS.DEFAULT_OPENROUTER_MODEL },
+                ollama: { baseUrl: PROVIDER_CONSTANTS.OLLAMA_MODELS_ENDPOINT, model: PROVIDER_CONSTANTS.DEFAULT_OLLAMA_MODEL }
+            };
+            needsSave = true;
+        }
 
-	private async speedDownCommand(): Promise<void> {
-		const player = this.getActiveYouTubePlayer();
-		if (!player) {
-			this.showFeedback('No video player found');
-			return;
-		}
+        // Migrate legacy OpenAI settings
+        if (this.settings.openaiApiKey && !this.settings.providers.openai?.apiKey) {
+            this.settings.providers.openai.apiKey = this.settings.openaiApiKey;
+            this.settings.providers.openai.model = this.settings.aiModel || PROVIDER_CONSTANTS.DEFAULT_OPENAI_MODEL;
+            needsSave = true;
+        }
+        
+        // Set defaults for missing settings
+        const defaults = {
+            currentProvider: 'openai',
+            externalTranscriptProvider: 'openai',
+            externalTranscriptProviderModel: this.settings.externalTranscriptModel || PROVIDER_CONSTANTS.DEFAULT_OPENAI_MODEL,
+            enableSummarization: false,
+            enableEnhancedTranscript: false,
+            enableExternalTranscriptDetection: false
+        };
 
-		try {
-			const internalPlayer = player.getInternalPlayer();
-			if (!internalPlayer) return;
+        Object.entries(defaults).forEach(([key, defaultValue]) => {
+            if ((this.settings as any)[key] === undefined) {
+                (this.settings as any)[key] = defaultValue;
+                needsSave = true;
+            }
+        });
 
-			const playbackRates = await internalPlayer.getAvailablePlaybackRates();
-			const currentRate = await internalPlayer.getPlaybackRate();
-			const currentIndex = playbackRates.indexOf(currentRate);
-			const nextIndex = Math.max(currentIndex - 1, 0);
-			const nextRate = playbackRates[nextIndex];
+        if (needsSave) {
+            console.log('Media Summarizer: Migrating settings to new provider structure');
+            this.saveSettings();
+        }
+    }
 
-			await internalPlayer.setPlaybackRate(nextRate);
-			this.showFeedback(`Speed: ${nextRate}x`);
-		} catch (error) {
-			console.error('Error changing speed:', error);
-			this.showFeedback('Error changing speed');
-		}
-	}
+    /**
+     * Get the LLM summarizer instance
+     */
+    getLLMSummarizer(): LLMSummarizer {
+        if (!this.llmSummarizer) {
+            this.initializeLLMSummarizer();
+        }
+        return this.llmSummarizer;
+    }
 
-	private async toggleMuteCommand(): Promise<void> {
-		const player = this.getActiveYouTubePlayer();
-		if (!player) {
-			this.showFeedback('No video player found');
-			return;
-		}
+    /**
+     * Check if the plugin is properly configured
+     */
+    isConfigured(): boolean {
+        return !!(
+            (this.settings.providers?.openai?.apiKey && this.settings.providers.openai.apiKey.trim()) ||
+            (this.settings.providers?.openrouter?.apiKey && this.settings.providers.openrouter.apiKey.trim()) ||
+            (this.settings.currentProvider === 'ollama') ||
+            (this.settings.openaiApiKey && this.settings.openaiApiKey.trim())
+        );
+    }
 
-		try {
-			const internalPlayer = player.getInternalPlayer();
-			if (!internalPlayer) return;
+    /**
+     * Legacy method compatibility - Get the active YouTube player
+     */
+    getActiveYouTubePlayer() {
+        return this.youtubePlayerService.getActivePlayer();
+    }
 
-			const isMuted = await internalPlayer.isMuted();
-			if (isMuted) {
-				await internalPlayer.unMute();
-				this.showFeedback('Audio unmuted');
-			} else {
-				await internalPlayer.mute();
-				this.showFeedback('Audio muted');
-			}
-		} catch (error) {
-			console.error('Error toggling mute:', error);
-			this.showFeedback('Error toggling mute');
-		}
-	}
+    /**
+     * Legacy method compatibility - Show feedback notification
+     */
+    showFeedback(message: string): void {
+        this.errorHandler.showInfo(message);
+    }
 
-	/**
-	 * Format timestamp with smart formatting
-	 */
-	private formatTimestamp(timestamp: number): string {
-		if (timestamp === undefined || timestamp === null || isNaN(timestamp) || timestamp < 0) {
-			return "00:00";
-		}
-		
-		const validTimestamp = Math.max(0, Math.floor(timestamp));
-		
-		const hours = Math.floor(validTimestamp / 3600);
-		const minutes = Math.floor((validTimestamp - hours * 3600) / 60);
-		const seconds = Math.floor(validTimestamp - hours * 3600 - minutes * 60);
-		
-		const safeSeconds = isNaN(seconds) ? 0 : seconds;
-		const safeMinutes = isNaN(minutes) ? 0 : minutes;
-		const safeHours = isNaN(hours) ? 0 : hours;
-		
-		const formattedSeconds = safeSeconds < 10 ? `0${safeSeconds}` : safeSeconds;
-		const formattedMinutes = safeMinutes < 10 ? `0${safeMinutes}` : safeMinutes;
-		
-		// Smart formatting: only show hours if video is longer than 1 hour
-		if (safeHours > 0) {
-			return `${safeHours}:${formattedMinutes}:${formattedSeconds}`;
-		} else {
-			return `${formattedMinutes}:${formattedSeconds}`;
-		}
-	}
+    /**
+     * Legacy method compatibility - Format timestamp
+     */
+    formatTimestamp(timestamp: number): string {
+        if (timestamp === undefined || timestamp === null || isNaN(timestamp) || timestamp < 0) {
+            return "00:00";
+        }
+        
+        const validTimestamp = Math.max(0, Math.floor(timestamp));
+        
+        const hours = Math.floor(validTimestamp / 3600);
+        const minutes = Math.floor((validTimestamp - hours * 3600) / 60);
+        const seconds = Math.floor(validTimestamp - hours * 3600 - minutes * 60);
+        
+        const safeSeconds = isNaN(seconds) ? 0 : seconds;
+        const safeMinutes = isNaN(minutes) ? 0 : minutes;
+        const safeHours = isNaN(hours) ? 0 : hours;
+        
+        const formattedSeconds = safeSeconds < 10 ? `0${safeSeconds}` : safeSeconds;
+        const formattedMinutes = safeMinutes < 10 ? `0${safeMinutes}` : safeMinutes;
+        
+        // Smart formatting: only show hours if video is longer than 1 hour
+        if (safeHours > 0) {
+            return `${safeHours}:${formattedMinutes}:${formattedSeconds}`;
+        } else {
+            return `${formattedMinutes}:${formattedSeconds}`;
+        }
+    }
 
-	/**
-	 * Activate the Media Summarizer view
-	 * Opens the view in the right sidebar if it's not already open
-	 */
-	async activateView(): Promise<void> {
-		const { workspace } = this.app;
+    /**
+     * Legacy method compatibility - Add video control commands  
+     */
+    addVideoControlCommands(): void {
+        // This is now handled by registerVideoControlCommands()
+        // Keeping for compatibility
+    }
 
-		let leaf: WorkspaceLeaf | null = null;
-		const leaves = workspace.getLeavesOfType(MEDIA_SUMMARIZER_VIEW_TYPE);
+    /**
+     * Get a user-friendly configuration status message
+     */
+    getConfigurationStatus(): string {
+        const currentProvider = this.settings.currentProvider;
+        
+        const validators = {
+            openai: (apiKey: string) => {
+                if (!apiKey || !apiKey.trim()) return 'OpenAI API key not configured. Please set it in plugin settings.';
+                if (!apiKey.startsWith('sk-')) return 'Invalid OpenAI API key format. Please check your API key.';
+                return 'OpenAI provider configured successfully.';
+            },
+            openrouter: (apiKey: string) => {
+                if (!apiKey || !apiKey.trim()) return 'OpenRouter API key not configured. Please set it in plugin settings.';
+                if (!apiKey.startsWith('sk-or-')) return 'Invalid OpenRouter API key format. Please check your API key.';
+                return 'OpenRouter provider configured successfully.';
+            },
+            ollama: () => 'Ollama provider selected. Make sure Ollama is running locally.'
+        };
 
-		if (leaves.length > 0) {
-			// If view is already open, just activate it
-			leaf = leaves[0];
-		} else {
-			// Create new view in the right sidebar
-			leaf = workspace.getRightLeaf(false);
-			await leaf.setViewState({
-				type: MEDIA_SUMMARIZER_VIEW_TYPE,
-				active: true,
-			});
-		}
-
-		// Reveal and activate the leaf
-		workspace.revealLeaf(leaf);
-
-		// Check if there's an active note with media_url
-		const activeFile = workspace.getActiveFile();
-		if (!activeFile) {
-			new Notice('Please open a note with a media_url in the frontmatter to load a video');
-			return;
-		}
-
-		// Check if the active note has a media_url in frontmatter
-		try {
-			const content = await this.app.vault.read(activeFile);
-			const frontmatterRegex = /^---\n([\s\S]*?)\n---/;
-			const match = content.match(frontmatterRegex);
-
-			if (match) {
-				const frontmatter = match[1];
-				const mediaUrlMatch = frontmatter.match(/media_url:\s*(.+)/);
-				
-				if (mediaUrlMatch) {
-					// Media URL found, view will load it automatically
-					new Notice('Media Summarizer opened - loading video from frontmatter');
-				} else {
-					new Notice('Add "media_url: [YouTube URL]" to your note\'s frontmatter to load a video');
-				}
-			} else {
-				new Notice('Add frontmatter with "media_url: [YouTube URL]" to load a video');
-			}
-		} catch (error) {
-			console.error('Error checking frontmatter:', error);
-		}
-	}
-
-	/**
-	 * Refresh the Media Summarizer view
-	 * Useful when switching between notes or updating frontmatter
-	 */
-	async refreshView(): Promise<void> {
-		const leaves = this.app.workspace.getLeavesOfType(MEDIA_SUMMARIZER_VIEW_TYPE);
-		
-		for (const leaf of leaves) {
-			const view = leaf.view as MediaSummarizerView;
-			if (view && typeof view.refresh === 'function') {
-				await view.refresh();
-			}
-		}
-	}
-
-	/**
-	 * Load plugin settings from storage
-	 */
-	async loadSettings(): Promise<void> {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-	}
-
-	/**
-	 * Save plugin settings to storage
-	 */
-	async saveSettings(): Promise<void> {
-		await this.saveData(this.settings);
-		
-		// Update LLM summarizer with new settings
-		this.initializeLLMSummarizer();
-		
-		// Refresh all Media Summarizer views to reflect settings changes
-		this.refreshAllMediaSummarizerViews();
-	}
-
-	/**
-	 * Refresh all Media Summarizer views to reflect settings changes
-	 */
-	private refreshAllMediaSummarizerViews(): void {
-		const leaves = this.app.workspace.getLeavesOfType(MEDIA_SUMMARIZER_VIEW_TYPE);
-		leaves.forEach(leaf => {
-			const view = leaf.view as MediaSummarizerView;
-			if (view && typeof view.refreshView === 'function') {
-				view.refreshView().catch(error => {
-					console.error('Error refreshing Media Summarizer view:', error);
-				});
-			}
-		});
-	}
-
-	/**
-	 * Initialize or update the LLM summarizer with current settings
-	 */
-	private initializeLLMSummarizer(): void {
-		// Migrate legacy settings to new provider-based settings if needed
-		this.migrateLegacySettings();
-		
-		// Create provider manager settings from plugin settings
-		const providerSettings: ProviderManagerSettings = {
-			currentProvider: this.settings.currentProvider,
-			openai: this.settings.providers.openai,
-			openrouter: this.settings.providers.openrouter,
-			ollama: this.settings.providers.ollama
-		};
-
-		if (this.llmSummarizer) {
-			// Update existing summarizer
-			this.llmSummarizer.updateSettings(providerSettings);
-		} else {
-			// Create new summarizer
-			this.llmSummarizer = new LLMSummarizer(providerSettings);
-		}
-	}
-
-	/**
-	 * Migrate legacy settings to new provider-based structure
-	 */
-	private migrateLegacySettings(): void {
-		let needsSave = false;
-
-		// Always ensure providers object exists
-		if (!this.settings.providers) {
-			this.settings.providers = {
-				openai: { apiKey: '', model: 'gpt-4o-mini' },
-				openrouter: { apiKey: '', model: 'anthropic/claude-3.5-sonnet' },
-				ollama: { baseUrl: 'http://localhost:11434', model: 'llama3.1:8b' }
-			};
-			needsSave = true;
-		}
-
-		// Migrate legacy OpenAI settings if they exist and haven't been migrated
-		if (this.settings.openaiApiKey && !this.settings.providers.openai?.apiKey) {
-			this.settings.providers.openai.apiKey = this.settings.openaiApiKey;
-			this.settings.providers.openai.model = this.settings.aiModel || 'gpt-4o-mini';
-			needsSave = true;
-		}
-		
-		// Set default provider selection if not set
-		if (!this.settings.currentProvider) {
-			this.settings.currentProvider = 'openai';
-			needsSave = true;
-		}
-
-		// Set default external transcript provider settings if not set
-		if (!this.settings.externalTranscriptProvider) {
-			this.settings.externalTranscriptProvider = 'openai';
-			needsSave = true;
-		}
-
-		if (!this.settings.externalTranscriptProviderModel) {
-			// Migrate from legacy setting if available
-			this.settings.externalTranscriptProviderModel = this.settings.externalTranscriptModel || 'gpt-4o-mini';
-			needsSave = true;
-		}
-
-		// Set default feature toggle settings if not set (for new progressive disclosure)
-		if (this.settings.enableSummarization === undefined) {
-			this.settings.enableSummarization = false; // Default to false for manual user enablement
-			needsSave = true;
-		}
-
-		if (this.settings.enableEnhancedTranscript === undefined) {
-			this.settings.enableEnhancedTranscript = false; // Default to false for manual user enablement
-			needsSave = true;
-		}
-
-		if (this.settings.enableExternalTranscriptDetection === undefined) {
-			this.settings.enableExternalTranscriptDetection = false; // Default to false for manual user enablement
-			needsSave = true;
-		}
-
-		// Save migrated settings if any changes were made
-		if (needsSave) {
-			console.log('Media Summarizer: Migrating settings to new provider structure');
-			this.saveSettings();
-		}
-	}
-
-	/**
-	 * Get the LLM summarizer instance
-	 */
-	getLLMSummarizer(): LLMSummarizer {
-		if (!this.llmSummarizer) {
-			this.initializeLLMSummarizer();
-		}
-		return this.llmSummarizer;
-	}
-
-	/**
-	 * Check if the plugin is properly configured
-	 */
-	isConfigured(): boolean {
-		// Check if any provider is configured
-		return !!(
-			(this.settings.providers?.openai?.apiKey && this.settings.providers.openai.apiKey.trim()) ||
-			(this.settings.providers?.openrouter?.apiKey && this.settings.providers.openrouter.apiKey.trim()) ||
-			(this.settings.currentProvider === 'ollama') || // Ollama doesn't require API key
-			(this.settings.openaiApiKey && this.settings.openaiApiKey.trim()) // Legacy support
-		);
-	}
-
-	/**
-	 * Get a user-friendly configuration status message
-	 */
-	getConfigurationStatus(): string {
-		const currentProvider = this.settings.currentProvider;
-		
-		if (currentProvider === 'openai') {
-			const apiKey = this.settings.providers?.openai?.apiKey || this.settings.openaiApiKey;
-			if (!apiKey || !apiKey.trim()) {
-				return 'OpenAI API key not configured. Please set it in plugin settings.';
-			}
-			if (!apiKey.startsWith('sk-')) {
-				return 'Invalid OpenAI API key format. Please check your API key.';
-			}
-			return 'OpenAI provider configured successfully.';
-		}
-		
-		if (currentProvider === 'openrouter') {
-			const apiKey = this.settings.providers?.openrouter?.apiKey;
-			if (!apiKey || !apiKey.trim()) {
-				return 'OpenRouter API key not configured. Please set it in plugin settings.';
-			}
-			if (!apiKey.startsWith('sk-or-')) {
-				return 'Invalid OpenRouter API key format. Please check your API key.';
-			}
-			return 'OpenRouter provider configured successfully.';
-		}
-		
-		if (currentProvider === 'ollama') {
-			return 'Ollama provider selected. Make sure Ollama is running locally.';
-		}
-		
-		return 'No AI provider configured. Please select and configure a provider in plugin settings.';
-	}
+        if (currentProvider === 'openai') {
+            const apiKey = this.settings.providers?.openai?.apiKey || this.settings.openaiApiKey;
+            return validators.openai(apiKey);
+        }
+        
+        if (currentProvider === 'openrouter') {
+            const apiKey = this.settings.providers?.openrouter?.apiKey;
+            return validators.openrouter(apiKey);
+        }
+        
+        if (currentProvider === 'ollama') {
+            return validators.ollama();
+        }
+        
+        return 'No AI provider configured. Please select and configure a provider in plugin settings.';
+    }
 }

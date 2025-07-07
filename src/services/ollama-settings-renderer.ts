@@ -107,35 +107,41 @@ export class OllamaSettingsRenderer extends ProviderSettingsRenderer {
     }
     
     public getCurrentModel(): string {
-        return this.settings.ollamaModel || this.getDefaultModel();
+        return this.settings.providers?.ollama?.model || this.getDefaultModel();
     }
     
     public setCurrentModel(value: string): void {
-        this.settings.ollamaModel = value;
+        if (!this.settings.providers) {
+            this.settings.providers = { openai: { apiKey: '', model: '' }, openrouter: { apiKey: '', model: '' }, ollama: { baseUrl: '', model: '' } };
+        }
+        this.settings.providers.ollama.model = value;
     }
     
     public getCustomModel(): string | undefined {
-        return this.settings.ollamaCustomModel;
+        return (this.settings as any).ollamaCustomModel;
     }
     
     public setCustomModel(value: string): void {
-        this.settings.ollamaCustomModel = value;
+        (this.settings as any).ollamaCustomModel = value;
     }
     
     public getTemperature(): number {
-        return this.settings.ollamaTemperature || 0.7;
+        return (this.settings as any).ollamaTemperature || 0.7;
     }
     
     public setTemperature(value: number): void {
-        this.settings.ollamaTemperature = value;
+        (this.settings as any).ollamaTemperature = value;
     }
     
     public getCustomUrl(): string | undefined {
-        return this.settings.ollamaUrl;
+        return this.settings.providers?.ollama?.baseUrl || (this.settings as any).ollamaUrl;
     }
     
     public setCustomUrl(value: string): void {
-        this.settings.ollamaUrl = value;
+        if (!this.settings.providers) {
+            this.settings.providers = { openai: { apiKey: '', model: '' }, openrouter: { apiKey: '', model: '' }, ollama: { baseUrl: '', model: '' } };
+        }
+        this.settings.providers.ollama.baseUrl = value;
     }
     
     /**

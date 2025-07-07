@@ -61,10 +61,6 @@ export const PROVIDER_CONSTANTS = {
         'Custom Model'
     ],
     
-    DEFAULT_OPENAI_MODEL: 'gpt-4o-mini',
-    DEFAULT_OPENROUTER_MODEL: 'anthropic/claude-3.5-sonnet',
-    DEFAULT_OLLAMA_MODEL: 'llama3.1:8b',
-    
     DEFAULT_OLLAMA_MODELS: [
         'llama3.1:8b',
         'llama3.1:70b',
@@ -82,6 +78,11 @@ export const PROVIDER_CONSTANTS = {
     
     // Display limits
     MAX_MODELS_DISPLAY: 50,
+    
+    // Default model selections
+    DEFAULT_OPENAI_MODEL: 'gpt-4o-mini',
+    DEFAULT_OPENROUTER_MODEL: 'anthropic/claude-3.5-sonnet',
+    DEFAULT_OLLAMA_MODEL: 'llama3.1:8b',
     
     // Error status mappings
     HTTP_STATUS_CODES: {

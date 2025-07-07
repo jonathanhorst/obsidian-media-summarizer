@@ -86,39 +86,45 @@ export class OpenRouterSettingsRenderer extends ProviderSettingsRenderer {
     
     // OpenRouter-specific getters and setters
     public hasApiKey(): boolean {
-        return !!this.settings.openrouterApiKey;
+        return !!this.settings.providers?.openrouter?.apiKey;
     }
     
     public getApiKey(): string {
-        return this.settings.openrouterApiKey || '';
+        return this.settings.providers?.openrouter?.apiKey || '';
     }
     
     public setApiKey(value: string): void {
-        this.settings.openrouterApiKey = value;
+        if (!this.settings.providers) {
+            this.settings.providers = { openai: { apiKey: '', model: '' }, openrouter: { apiKey: '', model: '' }, ollama: { baseUrl: '', model: '' } };
+        }
+        this.settings.providers.openrouter.apiKey = value;
     }
     
     public getCurrentModel(): string {
-        return this.settings.openrouterModel || this.getDefaultModel();
+        return this.settings.providers?.openrouter?.model || this.getDefaultModel();
     }
     
     public setCurrentModel(value: string): void {
-        this.settings.openrouterModel = value;
+        if (!this.settings.providers) {
+            this.settings.providers = { openai: { apiKey: '', model: '' }, openrouter: { apiKey: '', model: '' }, ollama: { baseUrl: '', model: '' } };
+        }
+        this.settings.providers.openrouter.model = value;
     }
     
     public getCustomModel(): string | undefined {
-        return this.settings.openrouterCustomModel;
+        return (this.settings as any).openrouterCustomModel;
     }
     
     public setCustomModel(value: string): void {
-        this.settings.openrouterCustomModel = value;
+        (this.settings as any).openrouterCustomModel = value;
     }
     
     public getTemperature(): number {
-        return this.settings.openrouterTemperature || 0.7;
+        return (this.settings as any).openrouterTemperature || 0.7;
     }
     
     public setTemperature(value: number): void {
-        this.settings.openrouterTemperature = value;
+        (this.settings as any).openrouterTemperature = value;
     }
     
     public getCustomUrl(): string | undefined {

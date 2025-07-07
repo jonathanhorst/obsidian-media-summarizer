@@ -245,7 +245,7 @@ export interface VideoPlayerEvent extends PluginEvent {
 export interface TranscriptEvent extends PluginEvent {
     videoId: string;
     action: 'fetch_start' | 'fetch_success' | 'fetch_error' | 'enhance_start' | 'enhance_success' | 'enhance_error';
-    source?: 'youtube' | 'external' | 'api';
+    source: 'youtube' | 'external' | 'api';
 }
 
 // UI Component interfaces

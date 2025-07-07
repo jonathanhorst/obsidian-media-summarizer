@@ -563,7 +563,7 @@ export function findPotentialTranscriptUrls(description: string): string[] {
 		const podcastDomains = [
 			'transistor.fm', 'anchor.fm', 'buzzsprout.com', 'libsyn.com',
 			'simplecast.com', 'fireside.fm', 'castos.com', 'captivate.fm',
-			'spotify.com', 'medium.com', 'substack.com', 'notion.so',
+			'spotify.com', 'substack.com', 
 			'github.io', 'netlify.app', 'vercel.app', 'herokuapp.com',
 			'wordpress.com', 'blogspot.com', 'ghost.io'
 		];

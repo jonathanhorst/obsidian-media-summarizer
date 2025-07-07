@@ -77,39 +77,45 @@ export class OpenAISettingsRenderer extends ProviderSettingsRenderer {
     
     // OpenAI-specific getters and setters
     public hasApiKey(): boolean {
-        return !!this.settings.openaiApiKey;
+        return !!(this.settings.providers?.openai?.apiKey || this.settings.openaiApiKey);
     }
     
     public getApiKey(): string {
-        return this.settings.openaiApiKey || '';
+        return this.settings.providers?.openai?.apiKey || this.settings.openaiApiKey || '';
     }
     
     public setApiKey(value: string): void {
-        this.settings.openaiApiKey = value;
+        if (!this.settings.providers) {
+            this.settings.providers = { openai: { apiKey: '', model: '' }, openrouter: { apiKey: '', model: '' }, ollama: { baseUrl: '', model: '' } };
+        }
+        this.settings.providers.openai.apiKey = value;
     }
     
     public getCurrentModel(): string {
-        return this.settings.openaiModel || this.getDefaultModel();
+        return this.settings.providers?.openai?.model || this.settings.aiModel || this.getDefaultModel();
     }
     
     public setCurrentModel(value: string): void {
-        this.settings.openaiModel = value;
+        if (!this.settings.providers) {
+            this.settings.providers = { openai: { apiKey: '', model: '' }, openrouter: { apiKey: '', model: '' }, ollama: { baseUrl: '', model: '' } };
+        }
+        this.settings.providers.openai.model = value;
     }
     
     public getCustomModel(): string | undefined {
-        return this.settings.openaiCustomModel;
+        return (this.settings as any).openaiCustomModel;
     }
     
     public setCustomModel(value: string): void {
-        this.settings.openaiCustomModel = value;
+        (this.settings as any).openaiCustomModel = value;
     }
     
     public getTemperature(): number {
-        return this.settings.openaiTemperature || 0.7;
+        return (this.settings as any).openaiTemperature || 0.7;
     }
     
     public setTemperature(value: number): void {
-        this.settings.openaiTemperature = value;
+        (this.settings as any).openaiTemperature = value;
     }
     
     public getCustomUrl(): string | undefined {
