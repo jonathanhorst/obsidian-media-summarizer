@@ -80,6 +80,9 @@ export const PROVIDER_CONSTANTS = {
     OPENROUTER_MODELS_ENDPOINT: 'https://openrouter.ai/api/v1/models',
     OLLAMA_MODELS_ENDPOINT: 'http://localhost:11434/api/tags',
     
+    // Display limits
+    MAX_MODELS_DISPLAY: 50,
+    
     // Error status mappings
     HTTP_STATUS_CODES: {
         UNAUTHORIZED: 401,
