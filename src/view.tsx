@@ -3,7 +3,7 @@ import { createRoot, Root } from 'react-dom/client';
 import * as React from 'react';
 import YouTube from 'react-youtube';
 import MediaSummarizerPlugin from './main';
-import { getTranscript, getTranscriptLines, getYouTubeMetadataAPI, formatRawTranscriptWithTimestamps, checkForExternalTranscript, scrapeSelectedUrl, checkForExternalTranscriptWithProvider, scrapeSelectedUrlWithProvider } from './summarizer';
+import { getTranscript, getTranscriptLines, getYouTubeMetadataAPI, formatRawTranscriptWithTimestamps, checkForExternalTranscript, scrapeSelectedUrl, checkForExternalTranscriptWithProvider, scrapeSelectedUrlWithProvider, enhanceTranscript } from './summarizer';
 import { YoutubeAPITranscript } from './youtube-api-transcript';
 
 /**
@@ -353,8 +353,21 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 					loadingNotice = new Notice('Enhancing transcript with AI...', 0);
 
 					// Enhance transcript with AI using timestamp data
-					const plainTranscript = transcriptLines.map(line => line.text).join(' ');
-					const enhancedTranscript = await plugin.getLLMSummarizer().enhanceTranscript(plainTranscript, metadata);
+					const currentProvider = plugin.settings.currentProvider;
+					const providerConfig = plugin.settings.providers[currentProvider];
+					
+					// Get API key based on provider type
+					let apiKey = '';
+					if (currentProvider === 'openai' || currentProvider === 'openrouter') {
+						apiKey = (providerConfig as any).apiKey;
+					} else if (currentProvider === 'ollama') {
+						// Ollama doesn't need API key, use empty string
+						apiKey = '';
+					}
+					
+					const model = providerConfig.model;
+					
+					const enhancedTranscript = await enhanceTranscript(transcriptLines, metadata, apiKey, model);
 					
 					if (enhancedTranscript.startsWith('Error:')) {
 						loadingNotice.hide();
