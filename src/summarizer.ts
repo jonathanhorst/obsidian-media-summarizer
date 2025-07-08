@@ -1432,37 +1432,44 @@ async function enhanceTranscriptSingle(
 		const durationDisplay = `${durationMinutes}:${durationSecondsRemainder.toString().padStart(2, '0')}`;
 
 		// Create the delimited prompt with speaker analysis and conditional formatting
-		const prompt = `CONTEXT INFORMATION:
+		const prompt = `
+		<context>
 Video Title: "${metadata.title}"
 Channel: "${metadata.channel}"
 Video Duration: ${durationDisplay} (${durationSeconds} seconds)
 Description: "${metadata.description}"
 
---- END OF CONTEXT ---
+</context>
 
-RAW TRANSCRIPT WITH TIMESTAMPS:
+<transcript>
 ${timestampedTranscript}
 
---- END OF TRANSCRIPT ---
+</transcript>
 
-IMPORTANT: Your task is to clean up the raw transcript text while preserving the spoken words. Only add words to complete sentences. Add punctuation, proper capitalization, paragraph breaks, and organize into sections with timestamps.
+<instructions>
 
-STEP 1: First, analyze the transcript to determine how many speakers are present. Look for:
-- Changes in voice/speaking style
-- Conversational back-and-forth
-- Interview format indicators
-- Multiple distinct speaking patterns
+CRITICAL RULES:
+- PRESERVE EXACT WORDS: Use the actual spoken words from the transcript
+- Only add punctuation, capitalization, and organization - don't change the meaning
+- Fix spelling of names/technical terms by using the video title and description context
+- Remove excessive filler words ("um," "uh," repetitive phrases) but keep the core spoken content
+- Use the timestamps from the raw transcript as your source of truth
+- Group copy into logical paragraphs setting a timestamp before each paragraph
+- Insert topic-based headings as markdown
+- Format the timestamps as [HH:MM:SS]()
 
-STEP 2: Format the transcript based on your speaker analysis:
 
-IF SINGLE SPEAKER (most common):
-### Introduction
+</instructions>
+
+<examples>
+
+### Example heading
 
 [00:00]()
 
 Use the EXACT words from the transcript, just cleaned up. For example: "There's a new method to make Cursor and Windsurf 10 times smarter that no one's talking about. Claude Code just went public and now works directly inside your AI editors, making AI coding ridiculously powerful."
 
-### Key Concepts Discussion  
+### Example heading
 
 [02:30]()
 
@@ -1472,43 +1479,13 @@ Continue with the exact spoken words from the transcript, organized by topic. Ad
 
 Another paragraph with content.
 
-### Technical Details
+### Example heading
 
 [05:45]()
 
 Keep organizing the actual transcript content by topic, using the real words spoken, not summaries or paraphrases.
 
-IF MULTIPLE SPEAKERS (only when clearly identifiable):
-### Introduction
-
-[00:00]()
-
-**Host**
-Use the exact words spoken by the host, cleaned up with punctuation: "Welcome to today's show. We're here with..."
-
-**Guest**
-Use the exact words spoken by the guest, cleaned up: "Thanks for having me. I'm excited to talk about..."
-
-### Discussion
-
-[02:30]()
-
-**Host**
-Continue with exact spoken words from the host, adding punctuation and organization but preserving the actual speech.
-
-CRITICAL RULES:
-- PRESERVE EXACT WORDS: Use the actual spoken words from the transcript
-- CLEAN, DON'T REWRITE: Only add punctuation, capitalization, and organization - don't change the meaning
-- Only list the speakers if more than one person is speaking
-- Use ### topic-based headings
-- Place clickable timestamps [HH:MM:SS]() on separate lines after headings
-- TIMESTAMP VALIDATION: Use ONLY timestamps from the provided transcript data
-- All output timestamps must be ≤ ${durationDisplay}
-- Consolidate provided timestamps to meaningful 30-60 second segments
-- Fix spelling of names/technical terms by using the video title and description context
-- Remove excessive filler words ("um," "uh," repetitive phrases) but keep the core spoken content
-
-Format the output as clean markdown.`;
+</examples>`;
 
 		const openaiRequest: OpenAIRequest = {
 			model: aiModel,
@@ -1587,38 +1564,45 @@ async function enhanceTranscriptWithChunking(
 			const {formattedText: chunkTranscript} = formatTranscriptWithTimestamps(chunk);
 			
 			// Create prompt for this chunk
-			const chunkPrompt = `CONTEXT INFORMATION:
+			const chunkPrompt = `
+			<context>
 Video Title: "${metadata.title}"
 Channel: "${metadata.channel}"
 Video Duration: ${durationDisplay} (${durationSeconds} seconds)
 Description: "${metadata.description}"
 ${isMultiChunk ? `\nPROCESSING NOTE: This is chunk ${i + 1} of ${chunks.length} from a longer transcript. Maintain consistency with previous sections.` : ''}
 
---- END OF CONTEXT ---
+</context>
 
-RAW TRANSCRIPT WITH TIMESTAMPS:
+<transcript>
 ${chunkTranscript}
 
---- END OF TRANSCRIPT ---
+</transcript>
 
-IMPORTANT: Your task is to clean up the raw transcript text while preserving the spoken words. Only add words to complete sentences. Add punctuation, proper capitalization, paragraph breaks, and organize into sections with timestamps.
+<instructions>
 
-STEP 1: First, analyze the transcript to determine how many speakers are present. Look for:
-- Changes in voice/speaking style
-- Conversational back-and-forth
-- Interview format indicators
-- Multiple distinct speaking patterns
+CRITICAL RULES:
+- PRESERVE EXACT WORDS: Use the actual spoken words from the transcript
+- Only add punctuation, capitalization, and organization - don't change the meaning
+- Fix spelling of names/technical terms by using the video title and description context
+- Remove excessive filler words ("um," "uh," repetitive phrases) but keep the core spoken content
+- Use the timestamps from the raw transcript as your source of truth
+- Group copy into logical paragraphs setting a timestamp before each paragraph
+- Insert topic-based headings as markdown with ### [topic based heading]
+- Format the timestamps as [HH:MM:SS]()
 
-STEP 2: Format the transcript based on your speaker analysis:
 
-IF SINGLE SPEAKER (most common):
-### Introduction
+</instructions>
+
+<examples>
+
+### [Heading]
 
 [00:00]()
 
 Use the EXACT words from the transcript, just cleaned up. For example: "There's a new method to make Cursor and Windsurf 10 times smarter that no one's talking about. Claude Code just went public and now works directly inside your AI editors, making AI coding ridiculously powerful."
 
-### Key Concepts Discussion  
+### [Heading]
 
 [02:30]()
 
@@ -1628,43 +1612,13 @@ Continue with the exact spoken words from the transcript, organized by topic. Ad
 
 Another paragraph with content.
 
-### Technical Details
+### [Heading]
 
 [05:45]()
 
 Keep organizing the actual transcript content by topic, using the real words spoken, not summaries or paraphrases.
 
-IF MULTIPLE SPEAKERS (only when clearly identifiable):
-### Introduction
-
-[00:00]()
-
-**Host**
-Use the exact words spoken by the host, cleaned up with punctuation: "Welcome to today's show. We're here with..."
-
-**Guest**
-Use the exact words spoken by the guest, cleaned up: "Thanks for having me. I'm excited to talk about..."
-
-### Discussion
-
-[02:30]()
-
-**Host**
-Continue with exact spoken words from the host, adding punctuation and organization but preserving the actual speech.
-
-CRITICAL RULES:
-- PRESERVE EXACT WORDS: Use the actual spoken words from the transcript
-- CLEAN, DON'T REWRITE: Only add punctuation, capitalization, and organization - don't change the meaning
-- Only list the speakers if more than one person is speaking
-- Use ### topic-based headings
-- Place clickable timestamps [HH:MM:SS]() on separate lines after headings
-- TIMESTAMP VALIDATION: Use ONLY timestamps from the provided transcript data
-- All output timestamps must be ≤ ${durationDisplay}
-- Consolidate provided timestamps to meaningful 30-60 second segments
-- Fix spelling of names/technical terms by using the video title and description context
-- Remove excessive filler words ("um," "uh," repetitive phrases) but keep the core spoken content
-
-Format the output as clean markdown.`;
+</examples>`;
 
 			const openaiRequest: OpenAIRequest = {
 				model: aiModel,

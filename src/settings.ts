@@ -44,6 +44,7 @@ export interface MediaSummarizerSettings {
 	// External transcript provider settings
 	externalTranscriptProvider: ProviderType;
 	externalTranscriptProviderModel: string;
+	useUniqueEnhancedTranscriptLLM: boolean;
 	seekSeconds: number;
 	timestampOffsetSeconds: number;
 	playbackOffsetSeconds: number;
@@ -93,6 +94,7 @@ export const DEFAULT_SETTINGS: MediaSummarizerSettings = {
 	// External transcript provider settings
 	externalTranscriptProvider: 'openai',
 	externalTranscriptProviderModel: 'gpt-4o-mini',
+	useUniqueEnhancedTranscriptLLM: false,
 	seekSeconds: 10,
 	timestampOffsetSeconds: 2,
 	playbackOffsetSeconds: 2,
@@ -110,6 +112,35 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 	constructor(app: App, plugin: MediaSummarizerPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
+	}
+
+	/**
+	 * Get all available provider types
+	 */
+	private getAvailableProviders(): ProviderType[] {
+		return ['openai', 'openrouter', 'ollama'];
+	}
+
+	/**
+	 * Get provider display names
+	 */
+	private getProviderOptions(): Record<string, string> {
+		return {
+			'openai': 'OpenAI',
+			'openrouter': 'OpenRouter', 
+			'ollama': 'Ollama'
+		};
+	}
+
+	/**
+	 * Get provider display names with descriptions
+	 */
+	private getProviderOptionsWithDescriptions(): Record<string, string> {
+		return {
+			'openai': 'OpenAI (GPT models)',
+			'openrouter': 'OpenRouter (Multiple models)',
+			'ollama': 'Ollama (Local models)'
+		};
 	}
 
 	/**
@@ -1271,11 +1302,7 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName('LLM Provider')
 			.addDropdown(dropdown => dropdown
-				.addOptions({
-					'openai': 'OpenAI',
-					'openrouter': 'OpenRouter',
-					'ollama': 'Ollama'
-				})
+				.addOptions(this.getProviderOptions())
 				.setValue(this.plugin.settings.currentProvider)
 				.onChange(async (value: ProviderType) => {
 					this.plugin.settings.currentProvider = value;
@@ -1305,17 +1332,27 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 		});
 
 		// Unique enhanced transcript LLM toggle
+		const isUniqueProvider = this.plugin.settings.useUniqueEnhancedTranscriptLLM;
+		
 		new Setting(containerEl)
 			.setName('Unique enhanced transcript LLM')
 			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.externalTranscriptProvider !== this.plugin.settings.currentProvider)
+				.setValue(isUniqueProvider)
 				.onChange(async (value) => {
+					this.plugin.settings.useUniqueEnhancedTranscriptLLM = value;
+					
 					if (value) {
-						// Enable unique provider - set to different from current
-						const otherProvider = this.plugin.settings.currentProvider === 'openai' ? 'openrouter' : 'openai';
-						this.plugin.settings.externalTranscriptProvider = otherProvider;
+						// Enable unique provider - use current external provider or set to different from current
+						if (this.plugin.settings.externalTranscriptProvider === this.plugin.settings.currentProvider) {
+							// Set to a different provider as default suggestion
+							const availableProviders = this.getAvailableProviders();
+							const otherProviders = availableProviders.filter(p => p !== this.plugin.settings.currentProvider);
+							const defaultProvider = otherProviders[0] || availableProviders[0];
+							this.plugin.settings.externalTranscriptProvider = defaultProvider;
+						}
+						// If already different, keep current selection
 					} else {
-						// Use same as primary
+						// Disable unique provider - sync back to primary
 						this.plugin.settings.externalTranscriptProvider = this.plugin.settings.currentProvider;
 					}
 					await this.plugin.saveSettings();
@@ -1326,16 +1363,13 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 					this.containerEl.scrollTop = scrollTop;
 				}));
 
-		// Show provider dropdown only if unique LLM is enabled
-		if (this.plugin.settings.externalTranscriptProvider !== this.plugin.settings.currentProvider) {
+		// Always show provider selection and model configuration
+		if (isUniqueProvider) {
+			// Show provider dropdown when unique LLM is enabled
 			new Setting(containerEl)
 				.setName('LLM Provider')
 				.addDropdown(dropdown => dropdown
-					.addOptions({
-						'openai': 'OpenAI',
-						'openrouter': 'OpenRouter',
-						'ollama': 'Ollama'
-					})
+					.addOptions(this.getProviderOptions())
 					.setValue(this.plugin.settings.externalTranscriptProvider)
 					.onChange(async (value: ProviderType) => {
 						this.plugin.settings.externalTranscriptProvider = value;
@@ -1346,8 +1380,10 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 						this.display();
 						this.containerEl.scrollTop = scrollTop;
 					}));
+		}
 
-			// Add model selector for the enhanced transcript provider
+		// Only add model selector when unique provider is enabled
+		if (isUniqueProvider) {
 			this.addEnhancedTranscriptProviderConfiguration(containerEl);
 		}
 	}
@@ -1371,140 +1407,235 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 	 * Add OpenAI model settings for enhanced transcript
 	 */
 	private addEnhancedTranscriptOpenAISettings(containerEl: HTMLElement): void {
-		// Only show model selection if API key is present
-		if (this.plugin.settings.providers.openai.apiKey) {
-			// OpenAI Model selection with refresh button
-			const openaiModelSetting = new Setting(containerEl)
-				.setName('Enhanced Transcript OpenAI Model')
-				.setDesc('Select an OpenAI model for enhanced transcript processing');
-
-			// Create container for dropdown and refresh button
-			const openaiModelContainer = openaiModelSetting.controlEl.createEl('div', { 
-				cls: 'openai-model-container',
-				attr: { style: 'display: flex; gap: 8px; align-items: center;' }
-			});
-
-			// Model dropdown
-			const openaiModelDropdown = openaiModelContainer.createEl('select', { 
-				cls: 'dropdown',
-				attr: { style: 'flex: 1; min-width: 200px;' }
-			});
-
-			// Refresh button
-			const openaiRefreshBtn = openaiModelContainer.createEl('button', { 
-				text: '🔄',
-				cls: 'mod-cta',
-				attr: { 
-					type: 'button',
-					style: 'padding: 4px 8px; min-width: auto;',
-					title: 'Refresh OpenAI models'
-				}
-			});
-
-			// Initialize models dropdown
-			this.initializeOpenAIModels(openaiModelDropdown);
-
-			// Set current value for enhanced transcript model
-			const currentModel = this.plugin.settings.externalTranscriptProviderModel || 'gpt-4o-mini';
-			openaiModelDropdown.value = currentModel;
-
-			// Handle model selection
-			openaiModelDropdown.addEventListener('change', async () => {
-				const selectedValue = openaiModelDropdown.value;
-				this.plugin.settings.externalTranscriptProviderModel = selectedValue;
-				await this.plugin.saveSettings();
-			});
-
-			// Handle refresh button click
-			openaiRefreshBtn.addEventListener('click', async () => {
-				openaiRefreshBtn.textContent = '⏳';
-				openaiRefreshBtn.disabled = true;
-				
-				try {
-					await this.refreshOpenAIModels(openaiModelDropdown);
-				} catch (error) {
-					console.error('Failed to refresh OpenAI models:', error);
-				} finally {
-					openaiRefreshBtn.textContent = '🔄';
-					openaiRefreshBtn.disabled = false;
-				}
-			});
+		const hasApiKey = !!this.plugin.settings.providers.openai.apiKey;
+		const isUniqueProvider = this.plugin.settings.useUniqueEnhancedTranscriptLLM;
+		const isDifferentFromPrimary = this.plugin.settings.externalTranscriptProvider !== this.plugin.settings.currentProvider;
+		
+		// If unique provider and different from primary, show API key configuration here
+		if (isUniqueProvider && isDifferentFromPrimary) {
+			new Setting(containerEl)
+				.setName('OpenAI API Key')
+				.setDesc('Enter your OpenAI API key for enhanced transcripts')
+				.addText(text => text
+					.setPlaceholder('sk-...')
+					.setValue(this.plugin.settings.providers.openai.apiKey)
+					.onChange(async (value) => {
+						this.plugin.settings.providers.openai.apiKey = value;
+						// Maintain backward compatibility
+						this.plugin.settings.openaiApiKey = value;
+						await this.plugin.saveSettings();
+						
+						// Refresh display to show/hide model dropdown
+						const scrollTop = this.containerEl.scrollTop;
+						this.display();
+						this.containerEl.scrollTop = scrollTop;
+					}));
 		}
+		
+		// OpenAI Model selection with refresh button
+		const openaiModelSetting = new Setting(containerEl)
+			.setName('Enhanced Transcript OpenAI Model')
+			.setDesc(hasApiKey ? 'Select an OpenAI model for enhanced transcript processing' : 'Configure OpenAI API key above');
+
+		if (!hasApiKey) {
+			// Show configuration hint when no API key
+			containerEl.createEl('div', {
+				cls: 'setting-item-description',
+				text: '⚠️ OpenAI API key required. Configure it above.',
+				attr: { style: 'color: var(--text-warning); margin-top: -12px; margin-bottom: 16px;' }
+			});
+			return;
+		}
+
+		// Create container for dropdown and refresh button
+		const openaiModelContainer = openaiModelSetting.controlEl.createEl('div', { 
+			cls: 'openai-model-container',
+			attr: { style: 'display: flex; gap: 8px; align-items: center;' }
+		});
+
+		// Model dropdown
+		const openaiModelDropdown = openaiModelContainer.createEl('select', { 
+			cls: 'dropdown',
+			attr: { style: 'flex: 1; min-width: 200px;' }
+		});
+
+		// Refresh button
+		const openaiRefreshBtn = openaiModelContainer.createEl('button', { 
+			text: '🔄',
+			cls: 'mod-cta',
+			attr: { 
+				type: 'button',
+				style: 'padding: 4px 8px; min-width: auto;',
+				title: 'Refresh OpenAI models'
+			}
+		});
+
+		// Initialize models dropdown
+		this.initializeOpenAIModels(openaiModelDropdown);
+
+		// Set current value for enhanced transcript model
+		const currentModel = this.plugin.settings.externalTranscriptProviderModel || 'gpt-4o-mini';
+		openaiModelDropdown.value = currentModel;
+
+		// Handle model selection
+		openaiModelDropdown.addEventListener('change', async () => {
+			const selectedValue = openaiModelDropdown.value;
+			this.plugin.settings.externalTranscriptProviderModel = selectedValue;
+			await this.plugin.saveSettings();
+		});
+
+		// Handle refresh button click
+		openaiRefreshBtn.addEventListener('click', async () => {
+			openaiRefreshBtn.textContent = '⏳';
+			openaiRefreshBtn.disabled = true;
+			
+			try {
+				await this.refreshOpenAIModels(openaiModelDropdown);
+			} catch (error) {
+				console.error('Failed to refresh OpenAI models:', error);
+			} finally {
+				openaiRefreshBtn.textContent = '🔄';
+				openaiRefreshBtn.disabled = false;
+			}
+		});
 	}
 
 	/**
 	 * Add OpenRouter model settings for enhanced transcript
 	 */
 	private addEnhancedTranscriptOpenRouterSettings(containerEl: HTMLElement): void {
-		// Only show model selection if API key is present
-		if (this.plugin.settings.providers.openrouter.apiKey) {
-			// OpenRouter Model selection with refresh button
-			const openrouterModelSetting = new Setting(containerEl)
-				.setName('Enhanced Transcript OpenRouter Model')
-				.setDesc('Select an OpenRouter model for enhanced transcript processing');
-
-			// Create container for dropdown and refresh button
-			const openrouterModelContainer = openrouterModelSetting.controlEl.createEl('div', { 
-				cls: 'openrouter-model-container',
-				attr: { style: 'display: flex; gap: 8px; align-items: center;' }
-			});
-
-			// Model dropdown
-			const openrouterModelDropdown = openrouterModelContainer.createEl('select', { 
-				cls: 'dropdown',
-				attr: { style: 'flex: 1; min-width: 200px;' }
-			});
-
-			// Refresh button
-			const openrouterRefreshBtn = openrouterModelContainer.createEl('button', { 
-				text: '🔄',
-				cls: 'mod-cta',
-				attr: { 
-					type: 'button',
-					style: 'padding: 4px 8px; min-width: auto;',
-					title: 'Refresh OpenRouter models'
-				}
-			});
-
-			// Initialize models dropdown
-			this.initializeOpenRouterModels(openrouterModelDropdown);
-
-			// Set current value for enhanced transcript model
-			const currentModel = this.plugin.settings.externalTranscriptProviderModel || 'anthropic/claude-3.5-sonnet';
-			openrouterModelDropdown.value = currentModel;
-
-			// Handle model selection
-			openrouterModelDropdown.addEventListener('change', async () => {
-				const selectedValue = openrouterModelDropdown.value;
-				this.plugin.settings.externalTranscriptProviderModel = selectedValue;
-				await this.plugin.saveSettings();
-			});
-
-			// Handle refresh button click
-			openrouterRefreshBtn.addEventListener('click', async () => {
-				openrouterRefreshBtn.textContent = '⏳';
-				openrouterRefreshBtn.disabled = true;
-				
-				try {
-					await this.refreshOpenRouterModels(openrouterModelDropdown);
-				} catch (error) {
-					console.error('Failed to refresh OpenRouter models:', error);
-				} finally {
-					openrouterRefreshBtn.textContent = '🔄';
-					openrouterRefreshBtn.disabled = false;
-				}
-			});
+		const hasApiKey = !!this.plugin.settings.providers.openrouter.apiKey;
+		const isUniqueProvider = this.plugin.settings.useUniqueEnhancedTranscriptLLM;
+		const isDifferentFromPrimary = this.plugin.settings.externalTranscriptProvider !== this.plugin.settings.currentProvider;
+		
+		// If unique provider and different from primary, show API key configuration here
+		if (isUniqueProvider && isDifferentFromPrimary) {
+			new Setting(containerEl)
+				.setName('OpenRouter API Key')
+				.setDesc('Enter your OpenRouter API key for enhanced transcripts')
+				.addText(text => text
+					.setPlaceholder('sk-or-v1-...')
+					.setValue(this.plugin.settings.providers.openrouter.apiKey)
+					.onChange(async (value) => {
+						this.plugin.settings.providers.openrouter.apiKey = value;
+						await this.plugin.saveSettings();
+						
+						// Refresh display to show/hide model dropdown
+						const scrollTop = this.containerEl.scrollTop;
+						this.display();
+						this.containerEl.scrollTop = scrollTop;
+					}));
 		}
+		
+		// OpenRouter Model selection with refresh button
+		const openrouterModelSetting = new Setting(containerEl)
+			.setName('Enhanced Transcript OpenRouter Model')
+			.setDesc(hasApiKey ? 'Select an OpenRouter model for enhanced transcript processing' : 'Configure OpenRouter API key above');
+
+		if (!hasApiKey) {
+			// Show configuration hint when no API key
+			containerEl.createEl('div', {
+				cls: 'setting-item-description',
+				text: '⚠️ OpenRouter API key required. Configure it above.',
+				attr: { style: 'color: var(--text-warning); margin-top: -12px; margin-bottom: 16px;' }
+			});
+			return;
+		}
+
+		// Create container for dropdown and refresh button
+		const openrouterModelContainer = openrouterModelSetting.controlEl.createEl('div', { 
+			cls: 'openrouter-model-container',
+			attr: { style: 'display: flex; gap: 8px; align-items: center;' }
+		});
+
+		// Model dropdown
+		const openrouterModelDropdown = openrouterModelContainer.createEl('select', { 
+			cls: 'dropdown',
+			attr: { style: 'flex: 1; min-width: 200px;' }
+		});
+
+		// Refresh button
+		const openrouterRefreshBtn = openrouterModelContainer.createEl('button', { 
+			text: '🔄',
+			cls: 'mod-cta',
+			attr: { 
+				type: 'button',
+				style: 'padding: 4px 8px; min-width: auto;',
+				title: 'Refresh OpenRouter models'
+			}
+		});
+
+		// Initialize models dropdown
+		this.initializeOpenRouterModels(openrouterModelDropdown);
+
+		// Set current value for enhanced transcript model
+		const currentModel = this.plugin.settings.externalTranscriptProviderModel || 'anthropic/claude-3.5-sonnet';
+		openrouterModelDropdown.value = currentModel;
+
+		// Handle model selection
+		openrouterModelDropdown.addEventListener('change', async () => {
+			const selectedValue = openrouterModelDropdown.value;
+			this.plugin.settings.externalTranscriptProviderModel = selectedValue;
+			await this.plugin.saveSettings();
+		});
+
+		// Handle refresh button click
+		openrouterRefreshBtn.addEventListener('click', async () => {
+			openrouterRefreshBtn.textContent = '⏳';
+			openrouterRefreshBtn.disabled = true;
+			
+			try {
+				await this.refreshOpenRouterModels(openrouterModelDropdown);
+			} catch (error) {
+				console.error('Failed to refresh OpenRouter models:', error);
+			} finally {
+				openrouterRefreshBtn.textContent = '🔄';
+				openrouterRefreshBtn.disabled = false;
+			}
+		});
 	}
 
 	/**
 	 * Add Ollama model settings for enhanced transcript
 	 */
 	private addEnhancedTranscriptOllamaSettings(containerEl: HTMLElement): void {
+		const hasBaseUrl = !!this.plugin.settings.providers.ollama.baseUrl;
+		const isUniqueProvider = this.plugin.settings.useUniqueEnhancedTranscriptLLM;
+		const isDifferentFromPrimary = this.plugin.settings.externalTranscriptProvider !== this.plugin.settings.currentProvider;
+		
+		// If unique provider and different from primary, show base URL configuration here
+		if (isUniqueProvider && isDifferentFromPrimary) {
+			new Setting(containerEl)
+				.setName('Ollama Base URL')
+				.setDesc('Enter your Ollama server URL for enhanced transcripts')
+				.addText(text => text
+					.setPlaceholder('http://localhost:11434')
+					.setValue(this.plugin.settings.providers.ollama.baseUrl)
+					.onChange(async (value) => {
+						this.plugin.settings.providers.ollama.baseUrl = value;
+						await this.plugin.saveSettings();
+						
+						// Refresh display to show/hide model dropdown
+						const scrollTop = this.containerEl.scrollTop;
+						this.display();
+						this.containerEl.scrollTop = scrollTop;
+					}));
+		}
+		
 		// Ollama Model selection with refresh button
 		const ollamaModelSetting = new Setting(containerEl)
 			.setName('Enhanced Transcript Ollama Model')
-			.setDesc('Select an Ollama model for enhanced transcript processing');
+			.setDesc(hasBaseUrl ? 'Select an Ollama model for enhanced transcript processing' : 'Configure Ollama base URL above');
+
+		if (!hasBaseUrl) {
+			// Show configuration hint when no base URL
+			containerEl.createEl('div', {
+				cls: 'setting-item-description',
+				text: '⚠️ Ollama base URL required. Configure it above.',
+				attr: { style: 'color: var(--text-warning); margin-top: -12px; margin-bottom: 16px;' }
+			});
+			return;
+		}
 
 		// Create container for dropdown and refresh button
 		const ollamaModelContainer = ollamaModelSetting.controlEl.createEl('div', { 
@@ -1786,8 +1917,8 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 						// Keep current external provider or default to different one
 						if (this.plugin.settings.externalTranscriptProvider === this.plugin.settings.currentProvider) {
 							// Set to a different provider
-							const providers: ProviderType[] = ['openai', 'openrouter', 'ollama'];
-							const differentProvider = providers.find(p => p !== this.plugin.settings.currentProvider) || 'openai';
+							const availableProviders = this.getAvailableProviders();
+							const differentProvider = availableProviders.find(p => p !== this.plugin.settings.currentProvider) || availableProviders[0];
 							this.plugin.settings.externalTranscriptProvider = differentProvider;
 						}
 					} else {
@@ -1808,11 +1939,7 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 				.setName('External Transcript AI Provider')
 				.setDesc('Choose a different AI provider for processing external transcripts')
 				.addDropdown(dropdown => dropdown
-					.addOptions({
-						'openai': 'OpenAI (GPT models)',
-						'openrouter': 'OpenRouter (Multiple models)',
-						'ollama': 'Ollama (Local models)'
-					})
+					.addOptions(this.getProviderOptionsWithDescriptions())
 					.setValue(this.plugin.settings.externalTranscriptProvider || 'openai')
 					.onChange(async (value: ProviderType) => {
 						this.plugin.settings.externalTranscriptProvider = value;
@@ -1931,8 +2058,8 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 						// Keep current external provider or default to different one
 						if (this.plugin.settings.externalTranscriptProvider === this.plugin.settings.currentProvider) {
 							// Set to a different provider
-							const providers: ProviderType[] = ['openai', 'openrouter', 'ollama'];
-							const differentProvider = providers.find(p => p !== this.plugin.settings.currentProvider) || 'openai';
+							const availableProviders = this.getAvailableProviders();
+							const differentProvider = availableProviders.find(p => p !== this.plugin.settings.currentProvider) || availableProviders[0];
 							this.plugin.settings.externalTranscriptProvider = differentProvider;
 						}
 					} else {
@@ -1953,11 +2080,7 @@ export class MediaSummarizerSettingTab extends PluginSettingTab {
 				.setName('External Transcript AI Provider')
 				.setDesc('Choose a different AI provider for processing external transcripts')
 				.addDropdown(dropdown => dropdown
-					.addOptions({
-						'openai': 'OpenAI (GPT models)',
-						'openrouter': 'OpenRouter (Multiple models)',
-						'ollama': 'Ollama (Local models)'
-					})
+					.addOptions(this.getProviderOptionsWithDescriptions())
 					.setValue(this.plugin.settings.externalTranscriptProvider || 'openai')
 					.onChange(async (value: ProviderType) => {
 						this.plugin.settings.externalTranscriptProvider = value;
