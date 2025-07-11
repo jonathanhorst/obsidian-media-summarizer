@@ -117,8 +117,9 @@ export const UI_CONSTANTS = {
     // Regex patterns
     TIMESTAMP_REGEX: /\[(\d{1,2}:\d{2}(?::\d{2})?)\]/,
     FRONTMATTER_REGEX: /^---\n([\s\S]*?)\n---/,
-    MEDIA_URL_REGEX: /media_url:\s*(.+)/,
+    URL_REGEX: /url:\s*(.+)/,
     YOUTUBE_URL_REGEX: /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
+    YOUTUBE_URL_VALIDATION_REGEX: /^https?:\/\/(www\.)?(youtube\.com\/(watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/,
 } as const;
 
 export const ERROR_MESSAGES = {

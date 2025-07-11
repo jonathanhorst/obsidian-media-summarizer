@@ -25,7 +25,7 @@ The plugin follows Obsidian's plugin architecture with these key components:
 - `src/timestamp-click-handler.ts` - Timestamp interaction handling
 
 ### Plugin Flow
-1. Plugin reads `media_url` from active note's frontmatter
+1. Plugin reads `url` from active note's frontmatter
 2. Extracts YouTube video ID and embeds video in custom view
 3. Fetches transcript using `youtube-transcript` library or YouTube Data API
 4. Uses configured AI provider (OpenAI/OpenRouter/Ollama) to process transcripts
@@ -33,7 +33,7 @@ The plugin follows Obsidian's plugin architecture with these key components:
 6. View automatically refreshes when switching between notes or updating frontmatter
 
 ### Key Integration Points
-- **Frontmatter Integration**: Plugin expects `media_url: [YouTube URL]` in note frontmatter
+- **Frontmatter Integration**: Plugin expects `url: [YouTube URL]` in note frontmatter
 - **Custom View**: Registers `MEDIA_SUMMARIZER_VIEW_TYPE` view in right sidebar by default
 - **Event Handling**: Listens for `active-leaf-change` and `vault.modify` events to refresh view
 - **Multi-Provider AI**: Supports OpenAI, OpenRouter, and Ollama with automatic model detection

@@ -10,7 +10,7 @@ An Obsidian plugin that allows you to view YouTube videos in a custom pane while
 - **Enhanced Transcripts**: AI-powered transcript formatting with better punctuation and speaker identification
 - **External Transcript Detection**: Automatically find higher-quality transcripts from video descriptions
 - **Keyboard Shortcuts**: Full keyboard control for seamless note-taking workflow
-- **Frontmatter Integration**: Load videos from note frontmatter `media_url` field
+- **Frontmatter Integration**: Load videos from note frontmatter `url` field
 - **Video Persistence**: Video continues playing while switching between notes
 - **Smart Focus Management**: Seamless interaction between video and note editing
 
@@ -32,7 +32,7 @@ An Obsidian plugin that allows you to view YouTube videos in a custom pane while
 1. **Add video to your note** - Include YouTube URL in frontmatter:
    ```yaml
    ---
-   media_url: https://www.youtube.com/watch?v=VIDEO_ID
+   url: https://www.youtube.com/watch?v=VIDEO_ID
    ---
    ```
 

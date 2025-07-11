@@ -415,12 +415,12 @@ Note: Set these shortcuts in Obsidian's Hotkey settings.`;
     }
 
     /**
-     * Validate active note has media_url
+     * Validate active note has url
      */
     private async validateActiveNote(): Promise<void> {
         const activeFile = this.app.workspace.getActiveFile();
         if (!activeFile) {
-            this.errorHandler.showInfo('Please open a note with a media_url in the frontmatter to load a video');
+            this.errorHandler.showInfo('Please open a note with a url in the frontmatter to load a video');
             return;
         }
 
@@ -430,15 +430,22 @@ Note: Set these shortcuts in Obsidian's Hotkey settings.`;
 
             if (frontmatterMatch) {
                 const frontmatter = frontmatterMatch[1];
-                const mediaUrlMatch = frontmatter.match(UI_CONSTANTS.MEDIA_URL_REGEX);
+                const urlMatch = frontmatter.match(UI_CONSTANTS.URL_REGEX);
                 
-                if (mediaUrlMatch) {
-                    this.errorHandler.showSuccess('Media Summarizer opened - loading video from frontmatter');
+                if (urlMatch) {
+                    const url = urlMatch[1].trim().replace(/['"]/g, '');
+                    
+                    // Validate that the URL is a YouTube URL
+                    if (UI_CONSTANTS.YOUTUBE_URL_VALIDATION_REGEX.test(url)) {
+                        this.errorHandler.showSuccess('Media Summarizer opened - loading video from frontmatter');
+                    } else {
+                        this.errorHandler.showInfo('Invalid YouTube URL. Please provide a valid YouTube URL (youtube.com or youtu.be).');
+                    }
                 } else {
-                    this.errorHandler.showInfo('Add "media_url: [YouTube URL]" to your note\'s frontmatter to load a video');
+                    this.errorHandler.showInfo('Add "url: [YouTube URL]" to your note\'s frontmatter to load a video');
                 }
             } else {
-                this.errorHandler.showInfo('Add frontmatter with "media_url: [YouTube URL]" to load a video');
+                this.errorHandler.showInfo('Add frontmatter with "url: [YouTube URL]" to load a video');
             }
         } catch (error) {
             console.error('Error checking frontmatter:', error);
