@@ -20,7 +20,7 @@ Get started immediately without any API keys:
 Include a YouTube URL in your note's frontmatter:
 ```yaml
 ---
-media_url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
 ---
 ```
 
@@ -142,7 +142,7 @@ When you click the timestamp button or use the keyboard shortcut:
 ### Video Persistence
 
 - **Seamless note switching**: Video continues playing when you switch between notes
-- **Smart refresh**: Video only reloads when `media_url` actually changes
+- **Smart refresh**: Video only reloads when `url` actually changes
 - **State preservation**: Playback position and speed maintained during note switches
 
 ## AI Features
@@ -232,7 +232,7 @@ When you click the timestamp button or use the keyboard shortcut:
 ### Video Issues
 
 **Video not loading?**
-- ✅ Check `media_url` format in frontmatter: `media_url: https://www.youtube.com/watch?v=VIDEO_ID`
+- ✅ Check `url` format in frontmatter: `url: https://www.youtube.com/watch?v=VIDEO_ID`
 - ✅ Ensure YouTube URL is accessible (not private/restricted/age-restricted)
 - ✅ Try refreshing the Media Summarizer view
 - ✅ Check if video requires sign-in or has regional restrictions

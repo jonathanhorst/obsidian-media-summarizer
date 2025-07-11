@@ -5,6 +5,7 @@ import YouTube from 'react-youtube';
 import MediaSummarizerPlugin from './main';
 import { getTranscript, getTranscriptLines, getYouTubeMetadataAPI, formatRawTranscriptWithTimestamps, checkForExternalTranscript, scrapeSelectedUrl, checkForExternalTranscriptWithProvider, scrapeSelectedUrlWithProvider, enhanceTranscript } from './summarizer';
 import { YoutubeAPITranscript } from './youtube-api-transcript';
+import { UI_CONSTANTS } from './constants';
 
 /**
  * Unique identifier for the Media Summarizer view type
@@ -873,7 +874,7 @@ export class MediaSummarizerView extends ItemView {
 		
 		const instructions = header.createEl('div', { cls: 'media-summarizer-instructions' });
 		instructions.createEl('p', { 
-			text: 'Add a "media_url" field to your note\'s frontmatter with a YouTube URL to load the video here.' 
+			text: 'Add a "url" field to your note\'s frontmatter with a YouTube URL to load the video here.' 
 		});
 
 		const reactContainer = mainContainer.createEl('div', { cls: 'media-summarizer-react-container' });
@@ -892,7 +893,7 @@ export class MediaSummarizerView extends ItemView {
 	async loadVideoFromActiveNote(): Promise<void> {
 		const activeFile = this.app.workspace.getActiveFile();
 		if (!activeFile) {
-			this.showPlaceholder('No active note. Please open a note with a media_url in the frontmatter.');
+			this.showPlaceholder('No active note. Please open a note with a url in the frontmatter.');
 			return;
 		}
 
@@ -902,24 +903,30 @@ export class MediaSummarizerView extends ItemView {
 			const match = content.match(frontmatterRegex);
 
 			if (!match) {
-				this.showPlaceholder('No frontmatter found. Add "media_url: [YouTube URL]" to your note\'s frontmatter.');
+				this.showPlaceholder('No frontmatter found. Add "url: [YouTube URL]" to your note\'s frontmatter.');
 				return;
 			}
 
 			const frontmatter = match[1];
-			const mediaUrlMatch = frontmatter.match(/media_url:\s*(.+)/);
+			const urlMatch = frontmatter.match(UI_CONSTANTS.URL_REGEX);
 
-			if (!mediaUrlMatch) {
-				this.showPlaceholder('No media_url found in frontmatter. Add "media_url: [YouTube URL]" to load a video.');
+			if (!urlMatch) {
+				this.showPlaceholder('No url found in frontmatter. Add "url: [YouTube URL]" to load a video.');
 				return;
 			}
 
-			const mediaUrl = mediaUrlMatch[1].trim().replace(/['"]/g, '');
+			const url = urlMatch[1].trim().replace(/['"]/g, '');
+			
+			// Validate that the URL is a YouTube URL
+			if (!UI_CONSTANTS.YOUTUBE_URL_VALIDATION_REGEX.test(url)) {
+				this.showPlaceholder('Invalid YouTube URL. Please provide a valid YouTube URL (youtube.com or youtu.be).');
+				return;
+			}
 			
 			// Only reload if URL changed
-			if (mediaUrl !== this.currentVideoUrl) {
-				this.currentVideoUrl = mediaUrl;
-				await this.loadVideo(mediaUrl);
+			if (url !== this.currentVideoUrl) {
+				this.currentVideoUrl = url;
+				await this.loadVideo(url);
 			}
 
 		} catch (error) {
@@ -985,7 +992,7 @@ export class MediaSummarizerView extends ItemView {
 				<div className="media-summarizer-example">
 					<strong>Example frontmatter:</strong>
 					<pre><code>---
-media_url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
 ---</code></pre>
 				</div>
 			</div>
@@ -1046,26 +1053,34 @@ media_url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
 
 			if (!match) {
 				if (this.currentVideoUrl) {
-					this.showPlaceholder('No frontmatter found. Add "media_url: [YouTube URL]" to your note\'s frontmatter.');
+					this.showPlaceholder('No frontmatter found. Add "url: [YouTube URL]" to your note\'s frontmatter.');
 				}
 				return;
 			}
 
 			const frontmatter = match[1];
-			const mediaUrlMatch = frontmatter.match(/media_url:\s*(.+)/);
+			const urlMatch = frontmatter.match(UI_CONSTANTS.URL_REGEX);
 
-			if (!mediaUrlMatch) {
+			if (!urlMatch) {
 				if (this.currentVideoUrl) {
-					this.showPlaceholder('No media_url found in frontmatter. Add "media_url: [YouTube URL]" to load a video.');
+					this.showPlaceholder('No url found in frontmatter. Add "url: [YouTube URL]" to load a video.');
 				}
 				return;
 			}
 
-			const mediaUrl = mediaUrlMatch[1].trim().replace(/['"]/g, '');
+			const url = urlMatch[1].trim().replace(/['"]/g, '');
 			
-			if (mediaUrl !== this.currentVideoUrl) {
-				this.currentVideoUrl = mediaUrl;
-				await this.loadVideo(mediaUrl);
+			// Validate that the URL is a YouTube URL
+			if (!UI_CONSTANTS.YOUTUBE_URL_VALIDATION_REGEX.test(url)) {
+				if (this.currentVideoUrl) {
+					this.showPlaceholder('Invalid YouTube URL. Please provide a valid YouTube URL (youtube.com or youtu.be).');
+				}
+				return;
+			}
+			
+			if (url !== this.currentVideoUrl) {
+				this.currentVideoUrl = url;
+				await this.loadVideo(url);
 			}
 
 		} catch (error) {
