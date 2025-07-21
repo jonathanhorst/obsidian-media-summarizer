@@ -20,7 +20,7 @@ Get started immediately without any API keys:
 Include a YouTube URL in your note's frontmatter:
 ```yaml
 ---
-media_url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
 ---
 ```
 
@@ -31,7 +31,8 @@ media_url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
 ### 3. Start Taking Notes
 - Use the timestamp button to insert current video time into your notes
 - Control playback with buttons or keyboard shortcuts
-- Switch between notes while keeping video playing
+- **Pin videos**: Click the pin button (📍) to keep videos playing when switching notes
+- **Unpin videos**: Click the pin button again (📌) to return to normal note-switching behavior
 
 ## Configuration
 

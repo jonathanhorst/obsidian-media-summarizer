@@ -123,7 +123,8 @@
 }
 
 /* Button styles */
-.media-summarizer-btn {
+.media-summarizer-btn,
+.control-btn {
 	background: var(--interactive-accent);
 	color: var(--text-on-accent);
 	border: none;
@@ -139,13 +140,41 @@
 	white-space: nowrap;
 }
 
-.media-summarizer-btn:hover {
+.media-summarizer-btn:hover,
+.control-btn:hover {
 	background: var(--interactive-accent-hover);
 	transform: translateY(-1px);
 }
 
-.media-summarizer-btn:active {
+.media-summarizer-btn:active,
+.control-btn:active {
 	transform: translateY(0);
+}
+
+/* Control button variants */
+.control-btn.control-btn-primary {
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+}
+
+.control-btn.control-btn-secondary {
+	background: var(--interactive-normal);
+	color: var(--text-normal);
+}
+
+.control-btn.control-btn-secondary:hover {
+	background: var(--interactive-hover);
+}
+
+.control-btn.control-btn-pinned {
+	background: var(--text-accent);
+	color: var(--text-on-accent);
+	border-color: var(--text-accent);
+}
+
+.control-btn.control-btn-pinned:hover {
+	background: var(--text-accent-hover);
+	border-color: var(--text-accent-hover);
 }
 
 .media-summarizer-timestamp-btn {

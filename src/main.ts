@@ -24,6 +24,7 @@ import {
 export default class MediaSummarizerPlugin extends Plugin {
     settings: MediaSummarizerSettings;
     private lastActiveFilePath: string | null = null;
+    private currentVideoUrl: string | null = null;
     private llmSummarizer: LLMSummarizer;
     private youtubePlayerService: YouTubePlayerService;
     private errorHandler: ErrorHandlingService;
@@ -55,6 +56,7 @@ export default class MediaSummarizerPlugin extends Plugin {
         await this.initializeServices();
         await this.loadSettings();
         await this.setupPlugin();
+        await this.initializeCurrentVideoUrl();
     }
 
     /**
@@ -212,24 +214,95 @@ export default class MediaSummarizerPlugin extends Plugin {
     }
 
     /**
-     * Handle active file changes
+     * Extract YouTube URL from a file's frontmatter
      */
-    private handleActiveFileChange(): void {
+    private async extractUrlFromFile(file: any): Promise<string | null> {
+        if (!file) return null;
+        
+        try {
+            const content = await this.app.vault.read(file);
+            const frontmatterMatch = content.match(UI_CONSTANTS.FRONTMATTER_REGEX);
+            
+            if (frontmatterMatch) {
+                const frontmatter = frontmatterMatch[1];
+                const urlMatch = frontmatter.match(UI_CONSTANTS.URL_REGEX);
+                
+                if (urlMatch) {
+                    const url = urlMatch[1].trim().replace(/['\"]/g, '');
+                    return UI_CONSTANTS.YOUTUBE_URL_VALIDATION_REGEX.test(url) ? url : null;
+                }
+            }
+            return null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    /**
+     * Handle active file changes - only refresh if video URL changes and not pinned
+     */
+    private async handleActiveFileChange(): Promise<void> {
         const currentActiveFile = this.app.workspace.getActiveFile();
         if (currentActiveFile && this.lastActiveFilePath !== currentActiveFile.path) {
             this.lastActiveFilePath = currentActiveFile.path;
-            this.refreshView();
+            
+            // Extract URL from new file
+            const newUrl = await this.extractUrlFromFile(currentActiveFile);
+            
+            // Check if any view is pinned
+            const leaves = this.app.workspace.getLeavesOfType(MEDIA_SUMMARIZER_VIEW_TYPE);
+            const isPinned = leaves.some(leaf => {
+                const view = leaf.view as MediaSummarizerView;
+                return view && view.getIsPinned();
+            });
+            
+            // If pinned and there's a current video, never refresh
+            if (isPinned && this.currentVideoUrl) {
+                // Keep the current video playing, don't change anything
+                return;
+            }
+            
+            // Not pinned: always refresh when URL changes (including going to no URL)
+            if (this.currentVideoUrl !== newUrl) {
+                this.currentVideoUrl = newUrl;
+                this.refreshView();
+            }
+        }
+    }
+
+    /**
+     * Initialize current video URL from active file
+     */
+    private async initializeCurrentVideoUrl(): Promise<void> {
+        const currentActiveFile = this.app.workspace.getActiveFile();
+        if (currentActiveFile) {
+            this.currentVideoUrl = await this.extractUrlFromFile(currentActiveFile);
         }
     }
 
     /**
      * Handle file modifications
      */
-    private handleFileModification(file: any): void {
+    private async handleFileModification(file: any): Promise<void> {
         const activeFile = this.app.workspace.getActiveFile();
         if (activeFile && file.path === activeFile.path) {
-            setTimeout(() => {
-                this.refreshView();
+            setTimeout(async () => {
+                // Check if the URL changed after file modification
+                const newUrl = await this.extractUrlFromFile(activeFile);
+                
+                // Only refresh if we're switching to a different video URL
+                // Keep video persistent when removing URL from frontmatter
+                const shouldRefresh = newUrl !== null && this.currentVideoUrl !== newUrl;
+                
+                if (shouldRefresh) {
+                    this.currentVideoUrl = newUrl;
+                    this.refreshView();
+                } else {
+                    // Only update currentVideoUrl if we're switching to a new video
+                    if (newUrl !== null) {
+                        this.currentVideoUrl = newUrl;
+                    }
+                }
             }, SETTINGS_CONSTANTS.SETTINGS_OPEN_DELAY);
         }
     }
@@ -420,7 +493,7 @@ Note: Set these shortcuts in Obsidian's Hotkey settings.`;
     private async validateActiveNote(): Promise<void> {
         const activeFile = this.app.workspace.getActiveFile();
         if (!activeFile) {
-            this.errorHandler.showInfo('Please open a note with a media_url in the frontmatter to load a video');
+            this.errorHandler.showInfo('Please open a note with a url in the frontmatter to load a video');
             return;
         }
 
@@ -430,15 +503,22 @@ Note: Set these shortcuts in Obsidian's Hotkey settings.`;
 
             if (frontmatterMatch) {
                 const frontmatter = frontmatterMatch[1];
-                const mediaUrlMatch = frontmatter.match(UI_CONSTANTS.MEDIA_URL_REGEX);
+                const urlMatch = frontmatter.match(UI_CONSTANTS.URL_REGEX);
                 
-                if (mediaUrlMatch) {
-                    this.errorHandler.showSuccess('Media Summarizer opened - loading video from frontmatter');
+                if (urlMatch) {
+                    const url = urlMatch[1].trim().replace(/['"]/g, '');
+                    
+                    // Validate that the URL is a YouTube URL
+                    if (UI_CONSTANTS.YOUTUBE_URL_VALIDATION_REGEX.test(url)) {
+                        this.errorHandler.showSuccess('Media Summarizer opened - loading video from frontmatter');
+                    } else {
+                        this.errorHandler.showInfo('Invalid YouTube URL. Please provide a valid YouTube URL (youtube.com or youtu.be).');
+                    }
                 } else {
-                    this.errorHandler.showInfo('Add "media_url: [YouTube URL]" to your note\'s frontmatter to load a video');
+                    this.errorHandler.showInfo('Add "url: [YouTube URL]" to your note\'s frontmatter to load a video');
                 }
             } else {
-                this.errorHandler.showInfo('Add frontmatter with "media_url: [YouTube URL]" to load a video');
+                this.errorHandler.showInfo('Add frontmatter with "url: [YouTube URL]" to load a video');
             }
         } catch (error) {
             console.error('Error checking frontmatter:', error);

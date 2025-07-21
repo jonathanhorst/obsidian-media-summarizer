@@ -33,12 +33,13 @@ The plugin follows Obsidian's plugin architecture with these key components:
 6. View automatically refreshes when switching between notes or updating frontmatter
 
 ### Key Integration Points
-- **Frontmatter Integration**: Plugin expects `media_url: [YouTube URL]` in note frontmatter
+- **Frontmatter Integration**: Plugin expects `url: [YouTube URL]` in note frontmatter (YouTube URLs only)
 - **Custom View**: Registers `MEDIA_SUMMARIZER_VIEW_TYPE` view in right sidebar by default
 - **Event Handling**: Listens for `active-leaf-change` and `vault.modify` events to refresh view
 - **Multi-Provider AI**: Supports OpenAI, OpenRouter, and Ollama with automatic model detection
 - **Progressive Settings**: "Value first" UI that provides immediate utility without API setup
 - **External Transcripts**: YouTube Data API + WebScraping.AI for enhanced transcript quality
+- **Pin Functionality**: Videos can be pinned to stay persistent when switching between notes
 
 ### Build System
 - Uses esbuild for bundling with production/development modes

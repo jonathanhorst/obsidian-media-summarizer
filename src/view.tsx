@@ -67,9 +67,11 @@ interface MediaPlayerProps {
 	plugin: MediaSummarizerPlugin;
 	onReady: () => void;
 	ytRef: React.RefObject<YouTube>;
+	isPinned: boolean;
+	togglePin: () => void;
 }
 
-const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, ytRef }) => {
+const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, ytRef, isPinned, togglePin }) => {
 	const [isReady, setIsReady] = React.useState(false);
 	const [externalTranscriptData, setExternalTranscriptData] = React.useState<{text: string, sourceUrl: string} | null>(null);
 	const [foundUrls, setFoundUrls] = React.useState<string[]>([]);
@@ -685,13 +687,22 @@ const MediaPlayer: React.FC<MediaPlayerProps> = ({ mediaLink, plugin, onReady, y
 							<div className="control-group-header">Quick Actions</div>
 							<div className="control-group-buttons">
 								<button 
-									className="control-btn control-btn-primary"
+									className="media-summarizer-btn media-summarizer-timestamp-btn"
 									onClick={insertTimestamp}
 									title="Insert current video timestamp at cursor position"
 									aria-label="Insert timestamp"
 								>
 									<span className="control-btn-icon">⏱️</span>
 									<span className="control-btn-text">Insert Timestamp</span>
+								</button>
+								<button 
+									className={`control-btn ${isPinned ? 'control-btn-pinned' : 'control-btn-secondary'}`}
+									onClick={togglePin}
+									title={isPinned ? "Unpin video (will refresh when switching notes)" : "Pin video (keep playing when switching notes)"}
+									aria-label={isPinned ? "Unpin video" : "Pin video"}
+								>
+									<span className="control-btn-icon">{isPinned ? '📌' : '📍'}</span>
+									<span className="control-btn-text">{isPinned ? 'Unpin' : 'Pin'}</span>
 								</button>
 							</div>
 						</div>
@@ -836,6 +847,7 @@ export class MediaSummarizerView extends ItemView {
 	private root: Root | null = null;
 	private currentVideoUrl: string = '';
 	private ytRef: React.RefObject<YouTube> = React.createRef<YouTube>();
+	private isPinned: boolean = false;
 
 	constructor(leaf: WorkspaceLeaf, plugin: MediaSummarizerPlugin) {
 		super(leaf);
@@ -861,6 +873,30 @@ export class MediaSummarizerView extends ItemView {
 		return this.ytRef;
 	}
 
+	/**
+	 * Get whether the video is pinned
+	 */
+	getIsPinned(): boolean {
+		return this.isPinned;
+	}
+
+	/**
+	 * Toggle pin state and handle logic
+	 */
+	togglePin(): void {
+		this.isPinned = !this.isPinned;
+		
+		// Always re-render immediately to update button state
+		if (this.currentVideoUrl) {
+			this.loadVideo(this.currentVideoUrl);
+		}
+		
+		// If we just unpinned, also refresh to show the current note's state
+		if (!this.isPinned) {
+			this.loadVideoFromActiveNote();
+		}
+	}
+
 	async onOpen(): Promise<void> {
 		const container = this.containerEl.children[1];
 		container.empty();
@@ -873,7 +909,7 @@ export class MediaSummarizerView extends ItemView {
 		
 		const instructions = header.createEl('div', { cls: 'media-summarizer-instructions' });
 		instructions.createEl('p', { 
-			text: 'Add a "media_url" field to your note\'s frontmatter with a YouTube URL to load the video here.' 
+			text: 'Add a "url" field to your note\'s frontmatter with a YouTube URL to load the video here.' 
 		});
 
 		const reactContainer = mainContainer.createEl('div', { cls: 'media-summarizer-react-container' });
@@ -892,7 +928,7 @@ export class MediaSummarizerView extends ItemView {
 	async loadVideoFromActiveNote(): Promise<void> {
 		const activeFile = this.app.workspace.getActiveFile();
 		if (!activeFile) {
-			this.showPlaceholder('No active note. Please open a note with a media_url in the frontmatter.');
+			this.showPlaceholder('No active note. Please open a note with a url in the frontmatter.');
 			return;
 		}
 
@@ -902,24 +938,31 @@ export class MediaSummarizerView extends ItemView {
 			const match = content.match(frontmatterRegex);
 
 			if (!match) {
-				this.showPlaceholder('No frontmatter found. Add "media_url: [YouTube URL]" to your note\'s frontmatter.');
+				this.showPlaceholder('No frontmatter found. Add "url: [YouTube URL]" to your note\'s frontmatter.');
 				return;
 			}
 
 			const frontmatter = match[1];
-			const mediaUrlMatch = frontmatter.match(/media_url:\s*(.+)/);
+			const urlMatch = frontmatter.match(/url:\s*(.+)/);
 
-			if (!mediaUrlMatch) {
-				this.showPlaceholder('No media_url found in frontmatter. Add "media_url: [YouTube URL]" to load a video.');
+			if (!urlMatch) {
+				this.showPlaceholder('No url found in frontmatter. Add "url: [YouTube URL]" to load a video.');
 				return;
 			}
 
-			const mediaUrl = mediaUrlMatch[1].trim().replace(/['"]/g, '');
+			const url = urlMatch[1].trim().replace(/['"]/g, '');
+			
+			// Validate that the URL is a YouTube URL
+			const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+			if (!youtubeRegex.test(url)) {
+				this.showPlaceholder('Invalid YouTube URL. Please provide a valid YouTube URL (youtube.com or youtu.be).');
+				return;
+			}
 			
 			// Only reload if URL changed
-			if (mediaUrl !== this.currentVideoUrl) {
-				this.currentVideoUrl = mediaUrl;
-				await this.loadVideo(mediaUrl);
+			if (url !== this.currentVideoUrl) {
+				this.currentVideoUrl = url;
+				await this.loadVideo(url);
 			}
 
 		} catch (error) {
@@ -969,6 +1012,8 @@ export class MediaSummarizerView extends ItemView {
 					}
 				}}
 				ytRef={this.ytRef}
+				isPinned={this.isPinned}
+				togglePin={() => this.togglePin()}
 			/>
 		);
 	}
@@ -985,7 +1030,7 @@ export class MediaSummarizerView extends ItemView {
 				<div className="media-summarizer-example">
 					<strong>Example frontmatter:</strong>
 					<pre><code>---
-media_url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
+url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
 ---</code></pre>
 				</div>
 			</div>
@@ -1034,7 +1079,7 @@ media_url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
 		const activeFile = this.app.workspace.getActiveFile();
 		if (!activeFile) {
 			if (this.currentVideoUrl) {
-				this.showPlaceholder('No active note. Please open a note with a media_url in the frontmatter.');
+				this.showPlaceholder('No active note. Please open a note with a url in the frontmatter.');
 			}
 			return;
 		}
@@ -1046,26 +1091,33 @@ media_url: https://www.youtube.com/watch?v=dQw4w9WgXcQ
 
 			if (!match) {
 				if (this.currentVideoUrl) {
-					this.showPlaceholder('No frontmatter found. Add "media_url: [YouTube URL]" to your note\'s frontmatter.');
+					this.showPlaceholder('No frontmatter found. Add "url: [YouTube URL]" to your note\'s frontmatter.');
 				}
 				return;
 			}
 
 			const frontmatter = match[1];
-			const mediaUrlMatch = frontmatter.match(/media_url:\s*(.+)/);
+			const urlMatch = frontmatter.match(/url:\s*(.+)/);
 
-			if (!mediaUrlMatch) {
+			if (!urlMatch) {
 				if (this.currentVideoUrl) {
-					this.showPlaceholder('No media_url found in frontmatter. Add "media_url: [YouTube URL]" to load a video.');
+					this.showPlaceholder('No url found in frontmatter. Add "url: [YouTube URL]" to load a video.');
 				}
 				return;
 			}
 
-			const mediaUrl = mediaUrlMatch[1].trim().replace(/['"]/g, '');
+			const url = urlMatch[1].trim().replace(/['"]/g, '');
 			
-			if (mediaUrl !== this.currentVideoUrl) {
-				this.currentVideoUrl = mediaUrl;
-				await this.loadVideo(mediaUrl);
+			// Validate that the URL is a YouTube URL
+			const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+			if (!youtubeRegex.test(url)) {
+				this.showPlaceholder('Invalid YouTube URL. Please provide a valid YouTube URL (youtube.com or youtu.be).');
+				return;
+			}
+			
+			if (url !== this.currentVideoUrl) {
+				this.currentVideoUrl = url;
+				await this.loadVideo(url);
 			}
 
 		} catch (error) {
