@@ -62,3 +62,8 @@ data.json
 
 # Reference materials (not part of the main project)
 .references/
+
+# Testing files (may contain sensitive data)
+testing/
+**/*test-config*.js
+**/*test-config*.ts
